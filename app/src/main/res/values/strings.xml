@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Attendace App</string>
+    <string name="welcome_message">Discover Your
+\nDream Job here</string>
+    <string name="welcome_subtitle"> Explore all and based existing interest job major on roles study the your
+</string>
+    <string name="register_text_header">Create Account</string>
+    <string name="register_text_subheader">Create an account so you can explore all the\n existing jobs</string>
+    <string name="register_button_text">Register</string>
+</resources>
