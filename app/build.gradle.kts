@@ -61,8 +61,12 @@ dependencies {
     implementation(libs.accompanist.systemuicontroller)
     // Rio Bottom Navigation
     implementation(libs.riobottomnavigation)
-
-
-    // google fonts
-    implementation(libs.androidx.ui.text.google.fonts)
+    // CameraX
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.camera.view)
+    // ML Kit Barcode Scanning
+    implementation(libs.barcode.scanning)
+    // Permission handling
+    implementation("com.google.accompanist:accompanist-permissions:0.37.3")
 }
