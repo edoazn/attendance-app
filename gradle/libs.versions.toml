@@ -18,6 +18,7 @@ navigationCompose = "2.9.5"
 riobottomnavigation = "1.0.2"
 uiTextGoogleFonts = "1.4.3"
 foundationLayoutAndroid = "1.7.2"
+firebaseKtx = "25.1.4"
 
 [libraries]
 accompanist-systemuicontroller = { module = "com.google.accompanist:accompanist-systemuicontroller", version.ref = "accompanistSystemuicontroller" }
@@ -30,6 +31,7 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 androidx-ui-text-google-fonts = { module = "androidx.compose.ui:ui-text-google-fonts", version.ref = "uiTextGoogleFonts" }
 barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "barcodeScanning" }
 camera-view = { module = "androidx.camera:camera-view", version.ref = "cameraView" }
+com-google-firebase-firebase-firestore-ktx = { module = "com.google.firebase:firebase-firestore-ktx", version.ref = "firebaseKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

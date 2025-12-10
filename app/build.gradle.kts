@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
+    id("kotlin-parcelize")
 }
 
 android {
@@ -10,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.attendaceapp"
-        minSdk = 22
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -59,14 +61,26 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.accompanist.systemuicontroller)
-    // Rio Bottom Navigation
-    implementation(libs.riobottomnavigation)
     // CameraX
+    implementation("androidx.camera:camera-core:1.5.2")
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.camera.view)
+    // guava
+    implementation("com.google.guava:guava:32.1.2-android")
     // ML Kit Barcode Scanning
     implementation(libs.barcode.scanning)
     // Permission handling
     implementation("com.google.accompanist:accompanist-permissions:0.37.3")
+    // Firebase BOM
+    implementation(platform("com.google.firebase:firebase-bom:34.6.0"))
+    // Firestore
+    implementation(libs.com.google.firebase.firebase.firestore.ktx)
+    // kotlinx coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    // Password hashing
+    implementation("org.mindrot:jbcrypt:0.4")
+    // QR Code generation
+    implementation("com.google.zxing:core:3.5.2")
 }

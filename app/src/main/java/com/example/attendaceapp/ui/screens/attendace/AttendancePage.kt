@@ -150,44 +150,47 @@ fun AttendancePage(
                             val previewView = PreviewView(ctx)
                             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
 
-                            cameraProviderFuture.addListener({
-                                val cameraProvider = cameraProviderFuture.get()
+                            cameraProviderFuture.addListener(
+                                {
+                                    val cameraProvider = cameraProviderFuture.get()
 
-                                val preview = Preview.Builder().build().also {
-                                    it.setSurfaceProvider(previewView.surfaceProvider)
-                                }
-
-                                val imageAnalysis = ImageAnalysis.Builder()
-                                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                    .build()
-                                    .also {
-                                        it.setAnalyzer(
-                                            cameraExecutor,
-                                            QRCodeAnalyzer { qrCodeValue ->
-                                                scannedCode = qrCodeValue
-                                                showSuccessDialog = true
-                                            }
-                                        )
+                                    val preview = Preview.Builder().build().also {
+                                        it.setSurfaceProvider(previewView.surfaceProvider)
                                     }
 
-                                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                                    val imageAnalysis = ImageAnalysis.Builder()
+                                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                        .build()
+                                        .also {
+                                            it.setAnalyzer(
+                                                cameraExecutor,
+                                                QRCodeAnalyzer { qrCodeValue ->
+                                                    scannedCode = qrCodeValue
+                                                    showSuccessDialog = true
+                                                }
+                                            )
+                                        }
 
-                                try {
-                                    cameraProvider.unbindAll()
-                                    cameraProvider.bindToLifecycle(
-                                        lifecycleOwner,
-                                        cameraSelector,
-                                        preview,
-                                        imageAnalysis
-                                    )
-                                } catch (e: Exception) {
-                                    Toast.makeText(
-                                        ctx,
-                                        "Failed to start camera: ${e.message}",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }, ContextCompat.getMainExecutor(ctx))
+                                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+
+                                    try {
+                                        cameraProvider.unbindAll()
+                                        cameraProvider.bindToLifecycle(
+                                            lifecycleOwner,
+                                            cameraSelector,
+                                            preview,
+                                            imageAnalysis
+                                        )
+                                    } catch (e: Exception) {
+                                        Toast.makeText(
+                                            ctx,
+                                            "Failed to start camera: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                },
+                                ContextCompat.getMainExecutor(ctx)
+                            )
 
                             previewView
                         },
