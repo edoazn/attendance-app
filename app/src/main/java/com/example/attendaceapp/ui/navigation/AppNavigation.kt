@@ -3,6 +3,7 @@ package com.example.attendaceapp.ui.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -18,11 +19,11 @@ import com.example.attendaceapp.data.local.DummyData
 import com.example.attendaceapp.ui.screens.auth.AuthViewModel
 import com.example.attendaceapp.ui.screens.auth.LoginPage
 import com.example.attendaceapp.ui.screens.history.HistoryPage
+import com.example.attendaceapp.ui.screens.home.HomePage
 import com.example.attendaceapp.ui.screens.lecturer.CreateStudentScreen
 import com.example.attendaceapp.ui.screens.lecturer.LecturerDashboardScreen
 import com.example.attendaceapp.ui.screens.profile.ProfilePage
 import com.example.attendaceapp.ui.screens.schedule.SchedulePage
-import com.example.attendaceapp.ui.screens.student.StudentDashboardScreen
 
 sealed class Screen(val route: String) {
 
@@ -113,15 +114,10 @@ fun AppNavigation(
 
             // STUDENT ROUTES
             composable(Screen.StudentDashboard.route) {
-                StudentDashboardScreen(
-                    authViewModel = authViewModel,
-                    onLogout = {
-                        authViewModel.logout()
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }
+                val currentUser by authViewModel.currentUser.collectAsState()
+
+                HomePage(
+                    user = currentUser
                 )
             }
 
@@ -131,7 +127,7 @@ fun AppNavigation(
 //            composable(Screen.Attendance.route) {
 //                AttendancePage(
 //                    onNavigateBack = { navController.popBackStack() },
-//                    currentUser = { authViewModel.currentUser }
+//                    currentUser = authViewModel.currentUser
 //                )
 //            }
             composable(Screen.History.route) {

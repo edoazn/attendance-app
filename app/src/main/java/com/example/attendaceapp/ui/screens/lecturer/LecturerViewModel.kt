@@ -22,6 +22,11 @@ class LecturerViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(LecturerUiState())
     val uiState: StateFlow<LecturerUiState> = _uiState.asStateFlow()
 
+    // Properti tambahan untuk kompatibilitas dengan UI yang baru
+    val sessions: StateFlow<List<AttendanceSession>> = MutableStateFlow(emptyList()) // Placeholder
+    val isLoading: StateFlow<Boolean> = MutableStateFlow(false) // Placeholder
+    val errorMessage: StateFlow<String?> = MutableStateFlow(null) // Placeholder
+
     fun createStudent(
         nim: String,
         name: String,
@@ -102,6 +107,23 @@ class LecturerViewModel : ViewModel() {
                 }
             )
         }
+    }
+
+    // Overload untuk kompatibilitas dengan UI yang baru
+    fun createAttendanceSession(subject: String, description: String) {
+        // Implementasi sementara atau sesuaikan dengan kebutuhan
+        // Misalnya menggunakan data dummy untuk lecturerId dll
+        createAttendanceSession(
+            courseId = "TEMP_ID",
+            courseName = subject,
+            lecturerId = "CURRENT_USER_ID", // Sebaiknya ambil dari User Session
+            lecturerName = "Current Lecturer",
+            durationInMinutes = 60
+        )
+    }
+
+    fun deleteSession(sessionId: String) {
+        // Implementasi delete session
     }
 
     fun loadActiveSessions(lecturerId: String) {

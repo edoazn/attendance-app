@@ -38,6 +38,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.attendaceapp.R
+import com.example.attendaceapp.data.model.User
 import com.example.attendaceapp.ui.components.AnnouncementCard
 import com.example.attendaceapp.ui.components.ScheduleCard
 import com.example.attendaceapp.ui.components.StatisticsCard
@@ -46,7 +47,10 @@ import com.example.attendaceapp.ui.navigation.BottomNavigationBar
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
-fun HomePage(modifier: Modifier = Modifier) {
+fun HomePage(
+    modifier: Modifier = Modifier,
+    user: User?
+) {
     LazyColumn(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -81,14 +85,14 @@ fun HomePage(modifier: Modifier = Modifier) {
                         // welcome text
                         Text(
                             modifier = Modifier.padding(bottom = 4.dp),
-                            text = "Selamat Pagi, User",
+                            text = "Selamat Pagi, ${user?.name ?: "Mahasiswa"}",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = colorResource(id = R.color.white),
                         )
                         // NIM
                         Text(
-                            text = "211420108",
+                            text = user?.nim ?: "-",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = colorResource(id = R.color.gray_400),
