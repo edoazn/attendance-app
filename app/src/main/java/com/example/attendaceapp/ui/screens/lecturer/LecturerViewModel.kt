@@ -26,12 +26,13 @@ class LecturerViewModel : ViewModel() {
         nim: String,
         name: String,
         email: String,
+        department: String,
         password: String
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
-            repository.createStudent(nim, name, email, password).fold(
+            repository.createStudent(nim, name, email, department, password).fold(
                 onSuccess = {
                     _uiState.update {
                         it.copy(
@@ -58,7 +59,8 @@ class LecturerViewModel : ViewModel() {
         courseName: String,
         lecturerId: String,
         lecturerName: String,
-        duration: Long,
+        durationInMinutes: Int,
+        lateThreshold: Int = 15
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
@@ -74,7 +76,7 @@ class LecturerViewModel : ViewModel() {
                     Date()
                 ),
                 createdAt = System.currentTimeMillis(),
-                expiresAt = System.currentTimeMillis() + (duration * 60 * 1000),
+                expiresAt = System.currentTimeMillis() + (durationInMinutes * 60 * 1000),
                 isActive = true,
                 attendanceCount = 0,
                 lateThreshold = 15

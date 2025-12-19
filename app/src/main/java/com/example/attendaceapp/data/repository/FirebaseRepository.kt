@@ -21,31 +21,42 @@ class FirebaseRepository {
     // AUTHENTICATION 
     suspend fun login(nim: String, password: String): Result<User> {
         return try {
-            val snapshot = usersCollection
+            val snapshot = db.collection("users")
                 .whereEqualTo("nim", nim)
-                .whereEqualTo("isActive", true)
-                .limit(1)
                 .get()
                 .await()
 
             if (snapshot.isEmpty) {
-                Result.failure(Exception("NIM tidak ditemukan atau akun tidak aktif"))
-            } else {
-                val user = snapshot.documents[0].toObject(User::class.java)!!
-
-                if (BCrypt.checkpw(password, user.passwordHash)) {
-                    // update last login
-                    usersCollection.document(user.id)
-                        .update("lastLogin", System.currentTimeMillis())
-                        .await()
-
-                    Result.success(user)
-                } else {
-                    Result.failure(Exception("Password salah"))
-                }
+                return Result.failure(Exception("NIM atau password tidak ditemukan"))
             }
+
+            val document = snapshot.documents[0]
+            val user = document.toObject(User::class.java)
+
+            if (user == null) {
+                return Result.failure(Exception("Error parsing user data"))
+            }
+
+            if (!user.isActive) {
+                return Result.failure(Exception("Akun tidak aktif. Hubungi admin."))
+            }
+
+            val passwordValid = BCrypt.checkpw(password, user.passwordHash)
+
+            if (!passwordValid) {
+                return Result.failure(Exception("NIM atau password salah"))
+            }
+
+            // Update last login
+            db.collection("users")
+                .document(user.id)
+                .update("lastLogin", System.currentTimeMillis())
+                .await()
+
+            Result.success(user)
         } catch (e: Exception) {
-            Result.failure(e)
+            e.printStackTrace()
+            Result.failure(Exception("Terjadi kesalahan: ${e.message}"))
         }
     }
 
@@ -53,6 +64,7 @@ class FirebaseRepository {
     suspend fun createStudent(
         nim: String,
         name: String,
+        email: String,
         department: String,
         defaultPassword: String
     ): Result<User> {
@@ -155,7 +167,7 @@ class FirebaseRepository {
                 studentNIM = studentNIM,
                 studentName = studentName,
                 lecturerId = session.lecturerId,
-                status = if (isLate) AttendanceStatus.LATE else AttendanceStatus.ABSENT
+                status = if (isLate) AttendanceStatus.LATE else AttendanceStatus.PRESENT
             )
 
             recordsCollection.document(record.id).set(record).await()
@@ -177,6 +189,19 @@ class FirebaseRepository {
         return try {
             recordsCollection
                 .whereEqualTo("studentNIM", nim)
+                .get()
+                .await()
+                .toObjects(AttendanceRecord::class.java)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    // Untuk melihat siapa saja yang sudah absen di sesi tertentu
+    suspend fun getSessionAttendanceRecords(sessionId: String): List<AttendanceRecord> {
+        return try {
+            recordsCollection
+                .whereEqualTo("sessionId", sessionId)
                 .get()
                 .await()
                 .toObjects(AttendanceRecord::class.java)

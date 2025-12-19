@@ -34,6 +34,7 @@ class StudentViewModel : ViewModel() {
                         currentState.copy(
                             isLoading = false,
                             attendanceHistory = currentState.attendanceHistory + record,
+                            lastRecordedAttendance = record,
                             successMessage = "Presensi berhasil direkam"
                         )
                     }
@@ -42,6 +43,7 @@ class StudentViewModel : ViewModel() {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
+                            lastRecordedAttendance = null,
                             error = exception.message ?: "Gagal mencatat presensi"
                         )
                     }
@@ -65,6 +67,6 @@ class StudentViewModel : ViewModel() {
     }
 
     fun clearMessages() {
-        _uiState.update { it.copy(error = null, successMessage = null) }
+        _uiState.update { it.copy(error = null, successMessage = null, lastRecordedAttendance = null) }
     }
 }

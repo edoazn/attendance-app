@@ -47,6 +47,7 @@ object DummyData {
     )
 }
 
+
 data class HistoryItem(
     val courseName: String,
     val room: String,

@@ -34,6 +34,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,10 +46,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.attendaceapp.data.model.User
 import com.example.attendaceapp.ui.components.QRScannerOverlay
+import com.example.attendaceapp.ui.screens.student.StudentViewModel
 import com.example.attendaceapp.utils.QRCodeAnalyzer
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -56,31 +61,39 @@ import com.google.accompanist.permissions.rememberPermissionState
 import java.util.concurrent.Executors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
-@androidx.compose.ui.tooling.preview.Preview(showSystemUi = true, showBackground = true)
 @Composable
 fun AttendancePage(
-    modifier: Modifier = Modifier,
+    currentUser: User,
+    viewModel: StudentViewModel = viewModel(),
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+    val uiState by viewModel.uiState.collectAsState()
 
     var scannedCode by remember { mutableStateOf<String?>(null) }
-    var showSuccessDialog by remember { mutableStateOf(false) }
-    val cameraExecutor = remember {
-        Executors.newSingleThreadExecutor()
-    }
+    var showResultDialog by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
+    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
 
-    DisposableEffect(lifecycleOwner) {
-        onDispose {
-            cameraExecutor.shutdown()
+    // Handle scan result
+    LaunchedEffect(scannedCode) {
+        if (scannedCode != null && !isProcessing) {
+            isProcessing = true
+            viewModel.recordAttendance(
+                sessionId = scannedCode!!,
+                studentNIM = currentUser.nim,
+                studentName = currentUser.name
+            )
         }
     }
 
-    LaunchedEffect(Unit) {
-        if (!cameraPermissionState.status.isGranted) {
-            cameraPermissionState.launchPermissionRequest()
+    // Show result dialog
+    LaunchedEffect(uiState.successMessage, uiState.error) {
+        if (uiState.successMessage != null || uiState.error != null) {
+            showResultDialog = true
+            isProcessing = false
         }
     }
 
@@ -106,7 +119,7 @@ fun AttendancePage(
         }
     ) { paddingValues ->
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
@@ -166,7 +179,6 @@ fun AttendancePage(
                                                 cameraExecutor,
                                                 QRCodeAnalyzer { qrCodeValue ->
                                                     scannedCode = qrCodeValue
-                                                    showSuccessDialog = true
                                                 }
                                             )
                                         }
@@ -225,35 +237,67 @@ fun AttendancePage(
             }
 
             // Success Dialog
-            if (showSuccessDialog && scannedCode != null) {
+            if (showResultDialog) {
                 AlertDialog(
                     onDismissRequest = {
-                        showSuccessDialog = false
+                        showResultDialog = false
                         scannedCode = null
+                        viewModel.clearMessages()
                     },
-                    title = { Text("QR Code Detected!", fontWeight = FontWeight.Bold) },
+                    title = {
+                        Text(
+                            text = if (uiState.successMessage != null) "✅ Berhasil!" else "❌ Gagal",
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
                     text = {
-                        Text("Scanned: $scannedCode\n\nAbsensi berhasil dicatat!")
+                        Column {
+                            Text(
+                                text = uiState.successMessage ?: uiState.error ?: "Unknown error",
+                                fontSize = 14.sp
+                            )
+                            if (uiState.lastRecordedAttendance != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Status: ${uiState.lastRecordedAttendance!!.status.name}",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
                     },
                     confirmButton = {
                         TextButton(onClick = {
-                            showSuccessDialog = false
+                            showResultDialog = false
                             scannedCode = null
-                            onNavigateBack()
+                            viewModel.clearMessages()
+                            if (uiState.successMessage != null) {
+                                onNavigateBack()
+                            }
                         }) {
-                            Text("OK")
+                            Text(if (uiState.successMessage != null) "OK" else "Tutup")
                         }
                     },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            showSuccessDialog = false
-                            scannedCode = null
-                        }) {
-                            Text("Scan Again")
+                    dismissButton = if (uiState.error != null) {
+                        {
+                            TextButton(onClick = {
+                                showResultDialog = false
+                                scannedCode = null
+                                viewModel.clearMessages()
+                            }) {
+                                Text("Scan Lagi")
+                            }
                         }
-                    }
+                    } else null
                 )
             }
+        }
+    }
+
+// Clean up camera executor on dispose
+    DisposableEffect(lifecycleOwner) {
+        onDispose {
+            cameraExecutor.shutdown()
         }
     }
 }

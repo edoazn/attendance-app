@@ -2,7 +2,6 @@ package com.example.attendaceapp.data.model
 
 import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
-import java.sql.Timestamp
 
 @Parcelize
 data class User(
@@ -18,11 +17,10 @@ data class User(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val createdBy: String = "",
-    val lastLogin: Timestamp? = null
+    val lastLogin: Long = System.currentTimeMillis()
 ) : Parcelable
 
 enum class UserRole {
     STUDENT,
-    LECTURER,
-    ADMIN
+    LECTURER
 }

@@ -13,11 +13,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,27 +39,41 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.attendaceapp.R
+import com.example.attendaceapp.data.model.UserRole
 import com.example.attendaceapp.ui.components.MyTextField
+import com.example.attendaceapp.ui.state.AuthState
+import kotlinx.coroutines.launch
 
 @Composable
 fun LoginPage(
-    onBackClick: () -> Unit,
-    onRegisterClick: () -> Unit,
-    onLoginSuccess: () -> Unit
+    viewModel: AuthViewModel = viewModel(),
+    onNavigateToLecturerDashboard: () -> Unit,
+    onNavigateToStudentDashboard: () -> Unit,
 ) {
-    // State variables for text fields
-    var emailText by rememberSaveable {
-        mutableStateOf("")
-    }
+    val authState by viewModel.authState.collectAsState()
 
+    var nimText by rememberSaveable { mutableStateOf("") }
     var passwordText by rememberSaveable { mutableStateOf("") }
+
+    // Handle navigation based on auth state
+    LaunchedEffect(authState) {
+        if (authState is AuthState.Success) {
+            val user = (authState as AuthState.Success).user
+            when (user.role) {
+                UserRole.LECTURER -> onNavigateToLecturerDashboard()
+                UserRole.STUDENT -> onNavigateToStudentDashboard()
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(color = Color.White)
     ) {
+        // Background images
         Image(
             painter = painterResource(R.drawable.bg_top),
             contentDescription = "Background Image",
@@ -98,8 +118,7 @@ fun LoginPage(
 
             // Text subheader
             Text(
-                text = "Welcome back you’ve\n" +
-                        "been missed!",
+                text = "Welcome back you’ve\nbeen missed!",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.Black,
@@ -108,16 +127,16 @@ fun LoginPage(
                 modifier = Modifier
                     .padding(bottom = 40.dp)
             )
-            // Text fields email
+            // NIM field
             MyTextField(
-                value = emailText,
-                onValueChange = { emailText = it },
-                placeHolder = "Email",
-                keyboardType = KeyboardType.Email,
+                value = nimText,
+                onValueChange = { nimText = it },
+                placeHolder = "NIM",
+                keyboardType = KeyboardType.Number,
                 isPassword = false
             )
             Spacer(modifier = Modifier.height(16.dp))
-            // Text fields password
+            // Password field
             MyTextField(
                 value = passwordText,
                 onValueChange = { passwordText = it },
@@ -126,22 +145,21 @@ fun LoginPage(
                 trailingIcon = null,
                 isPassword = true
             )
-            // Forgot password link
-            Text(
-                text = "Forgot Password?",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colorResource(R.color.primary_color),
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .padding(vertical = 24.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        // Handle Forgot Password click
-                    }
-            )
+
+            // Error message
+            if (authState is AuthState.Error) {
+                Text(
+                    text = (authState as AuthState.Error).error,
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Login button
             Box(
@@ -154,66 +172,54 @@ fun LoginPage(
                         clip = false
                     )
                     .clip(RoundedCornerShape(10.dp))
-                    .background(color = colorResource(R.color.primary_color))
+                    .background(
+                        color = if (authState is AuthState.Loading)
+                            colorResource(R.color.primary_color).copy(alpha = 0.6f)
+                        else
+                            colorResource(R.color.primary_color)
+                    )
                     .clickable(
+                        enabled = authState !is AuthState.Loading,
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }
                     ) {
-                        // Handle Login click
-                        onLoginSuccess()
+                        if (nimText.isNotBlank() && passwordText.isNotBlank()) {
+                            viewModel.login(nimText, passwordText)
+                        }
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    text = "Login",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
+                if (authState is AuthState.Loading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                    )
+                } else {
+                    Text(
+                        text = "Login",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                    )
+                }
             }
-            // Sign up link
+
+            //Info Text
             Text(
-                text = "Create a new account",
+                text = "Hubungi dosen untuk membuat akun",
                 fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Normal,
                 color = Color(0xff494949),
                 modifier = Modifier
                     .padding(vertical = 24.dp)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        onRegisterClick()
-                    }
             )
-            Text(
-                text = "OR",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colorResource(R.color.primary_color),
-                modifier = Modifier
-                    .padding(bottom = 20.dp)
-            )
-            // Social login options
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        // Handle Google Login click
-                    }
-                    .background(color = Color(0xffF5F5F5)),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_google),
-                    contentDescription = "Google Login",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+        }
+    }
+
+    // Reset auth state when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.resetAuthState()
         }
     }
 }
