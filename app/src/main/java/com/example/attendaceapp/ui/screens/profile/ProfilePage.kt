@@ -1,7 +1,10 @@
 package com.example.attendaceapp.ui.screens.profile
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,13 +34,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.attendaceapp.R
 import com.example.attendaceapp.ui.components.SettingCard
+import com.example.attendaceapp.ui.screens.auth.AuthViewModel
 
 @Preview(showBackground = true, showSystemUi = true)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfilePage(modifier: Modifier = Modifier) {
+fun ProfilePage(
+    modifier: Modifier = Modifier,
+    viewModel: AuthViewModel = viewModel()
+) {
+    val indication = LocalIndication.current
+
     Scaffold(
         containerColor = Color.White,
         topBar = {
@@ -99,7 +110,13 @@ fun ProfilePage(modifier: Modifier = Modifier) {
                         1.dp,
                         colorResource(id = R.color.primary_color),
                         RoundedCornerShape(10.dp)
-                    ),
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = indication,
+                    ) {
+                            viewModel.logout()
+                        },
                 contentAlignment = Alignment.Center,
             ) {
                 Text(

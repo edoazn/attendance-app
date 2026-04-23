@@ -41,7 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.attendaceapp.R
-import com.example.attendaceapp.data.model.UserRole
 import com.example.attendaceapp.ui.components.MyTextField
 import com.example.attendaceapp.ui.state.AuthState
 import kotlinx.coroutines.launch
@@ -49,22 +48,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginPage(
     viewModel: AuthViewModel = viewModel(),
-    onNavigateToLecturerDashboard: () -> Unit,
-    onNavigateToStudentDashboard: () -> Unit,
+    onLoginSuccess: () -> Unit,
 ) {
     val authState by viewModel.authState.collectAsState()
 
     var nimText by rememberSaveable { mutableStateOf("") }
     var passwordText by rememberSaveable { mutableStateOf("") }
 
-    // Handle navigation based on auth state
+    // Mobile app user-only: semua login sukses diarahkan ke flow user.
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
-            val user = (authState as AuthState.Success).user
-            when (user.role) {
-                UserRole.LECTURER -> onNavigateToLecturerDashboard()
-                UserRole.STUDENT -> onNavigateToStudentDashboard()
-            }
+            onLoginSuccess()
         }
     }
 

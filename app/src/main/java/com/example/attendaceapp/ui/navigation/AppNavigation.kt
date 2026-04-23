@@ -16,31 +16,21 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.attendaceapp.data.local.DummyData
+import com.example.attendaceapp.ui.screens.attendace.AttendancePage
 import com.example.attendaceapp.ui.screens.auth.AuthViewModel
 import com.example.attendaceapp.ui.screens.auth.LoginPage
 import com.example.attendaceapp.ui.screens.history.HistoryPage
 import com.example.attendaceapp.ui.screens.home.HomePage
-import com.example.attendaceapp.ui.screens.lecturer.CreateStudentScreen
-import com.example.attendaceapp.ui.screens.lecturer.LecturerDashboardScreen
 import com.example.attendaceapp.ui.screens.profile.ProfilePage
 import com.example.attendaceapp.ui.screens.schedule.SchedulePage
 
 sealed class Screen(val route: String) {
-
-    // Auth
     data object Login : Screen("login")
-
-    // Student Routes
     data object StudentDashboard : Screen("student_dashboard")
     data object Schedule : Screen("schedule")
     data object Attendance : Screen("attendance")
     data object History : Screen("history")
     data object Profile : Screen("profile")
-
-    // Lecturer Routes
-    data object LecturerDashboard : Screen("lecturer_dashboard")
-    data object CreateStudent : Screen("create_student")
-    data object QRGenerator : Screen("qr_generator")
 }
 
 @Composable
@@ -97,13 +87,7 @@ fun AppNavigation(
             composable(Screen.Login.route) {
                 LoginPage(
                     viewModel = authViewModel,
-                    onNavigateToLecturerDashboard = {
-                        navController.navigate(Screen.LecturerDashboard.route) {
-                            popUpTo(Screen.Login.route) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    },
-                    onNavigateToStudentDashboard = {
+                    onLoginSuccess = {
                         navController.navigate(Screen.StudentDashboard.route) {
                             popUpTo(Screen.Login.route) { inclusive = true }
                             launchSingleTop = true
@@ -122,55 +106,23 @@ fun AppNavigation(
             }
 
             composable(Screen.Schedule.route) {
-                SchedulePage(scheduleList = DummyData.scheduleList)
+                SchedulePage(scheduleList = DummyData.scheduleList, onPengajuanClick = {}, onAbsensiClick = {})
             }
-//            composable(Screen.Attendance.route) {
-//                AttendancePage(
-//                    onNavigateBack = { navController.popBackStack() },
-//                    currentUser = authViewModel.currentUser
-//                )
-//            }
+            composable(Screen.Attendance.route) {
+                val currentUser by authViewModel.currentUser.collectAsState()
+                currentUser?.let { user ->
+                    AttendancePage(
+                        currentUser = user,
+                        onNavigateBack = { navController.popBackStack() }
+                    )
+                }
+            }
             composable(Screen.History.route) {
                 HistoryPage()
             }
             composable(Screen.Profile.route) {
                 ProfilePage()
             }
-
-            // LECTURER ROUTES
-            composable(Screen.LecturerDashboard.route) {
-                LecturerDashboardScreen(
-                    onNavigateToCreateStudent = {
-                        navController.navigate(Screen.CreateStudent.route)
-                    },
-                    onNavigateToQRGenerator = {
-                        navController.navigate(Screen.QRGenerator.route)
-                    },
-                    onNavigateToSessionDetail = { sessionId ->
-                        // navController.navigate("session_detail/$sessionId")
-                    },
-                    viewModel = viewModel(),
-                    currentUser = authViewModel.currentUser,
-                    onLogout = {
-                        authViewModel.logout()
-                        navController.navigate(Screen.Login.route) {
-                            popUpTo(0) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }
-                )
-            }
-
-            composable(Screen.CreateStudent.route) {
-                CreateStudentScreen(
-                    onNavigateBack = { navController.popBackStack() }
-                )
-            }
-//            composable(Screen.QRGenerator.route) {
-//                QRGeneratorScreen(
-//                    onNavigateBack = { navController.popBackStack() }
-//                )
-//            }
         }
     }
 }

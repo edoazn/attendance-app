@@ -3,7 +3,7 @@ package com.example.attendaceapp.ui.screens.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.attendaceapp.data.model.User
-import com.example.attendaceapp.data.repository.FirebaseRepository
+import com.example.attendaceapp.data.repository.ApiRepository
 import com.example.attendaceapp.ui.state.AuthState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class AuthViewModel : ViewModel() {
-    private val repository = FirebaseRepository()
+    private val repository = ApiRepository()
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()

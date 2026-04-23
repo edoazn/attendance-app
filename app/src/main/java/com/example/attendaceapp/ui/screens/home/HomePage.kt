@@ -8,20 +8,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,23 +40,23 @@ import com.example.attendaceapp.ui.components.AnnouncementCard
 import com.example.attendaceapp.ui.components.ScheduleCard
 import com.example.attendaceapp.ui.components.StatisticsCard
 import com.example.attendaceapp.ui.navigation.BottomNavItem
-import com.example.attendaceapp.ui.navigation.BottomNavigationBar
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun HomePage(
     modifier: Modifier = Modifier,
-    user: User?
+    user: User? = null,
 ) {
     LazyColumn(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         item {
+
             // Vector background
             Box(
                 modifier = modifier
-                    .height(190.dp)
+                    .height(158.dp)
                     .fillMaxWidth()
                     .clip(shape = RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
                     .background(color = colorResource(id = R.color.primary_color))
@@ -71,7 +68,12 @@ fun HomePage(
                         shape = RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp),
                     )
                     // top padding 40 dp
-                    .padding(top = 30.dp, start = 24.dp, end = 24.dp, bottom = 16.dp),
+                    .padding(
+                        top = 30.dp,
+                        start = 24.dp,
+                        end = 24.dp,
+                        bottom = 16.dp
+                    ),
                 contentAlignment = Alignment.TopCenter,
             ) {
                 // User info and leading icon
@@ -92,7 +94,7 @@ fun HomePage(
                         )
                         // NIM
                         Text(
-                            text = user?.nim ?: "-",
+                            text = user?.identityNumber ?: "-",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Normal,
                             color = colorResource(id = R.color.gray_400),
@@ -118,13 +120,7 @@ fun HomePage(
                                 tint = colorResource(id = R.color.primary_color),
                             )
                         }
-                        // User Avatar
-                        Image(
-                            painter = painterResource(R.drawable.avatar),
-                            contentDescription = "User Avatar",
-                            modifier = Modifier
-                                .height(50.dp)
-                        )
+//                        // User Avatar
                     }
                 }
             }
@@ -146,7 +142,7 @@ fun HomePage(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-                    .padding(bottom = 12.dp),
+                    .offset(y = (-18).dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -154,7 +150,7 @@ fun HomePage(
                     text = "Jadwal Saya",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colorResource(id = R.color.black),
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = "See all",
@@ -179,7 +175,7 @@ fun HomePage(
                 text = "Pengumuman Terbaru",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = colorResource(id = R.color.black),
+                color = MaterialTheme.colorScheme.onSurface,
             )
         }
         item {

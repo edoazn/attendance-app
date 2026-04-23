@@ -2,7 +2,7 @@ package com.example.attendaceapp.ui.screens.student
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.attendaceapp.data.repository.FirebaseRepository
+import com.example.attendaceapp.data.repository.ApiRepository
 import com.example.attendaceapp.ui.state.StudentUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class StudentViewModel : ViewModel() {
-    private val repository = FirebaseRepository()
+    private val repository = ApiRepository()
 
     private val _uiState = MutableStateFlow(StudentUiState())
     val uiState: StateFlow<StudentUiState> = _uiState.asStateFlow()

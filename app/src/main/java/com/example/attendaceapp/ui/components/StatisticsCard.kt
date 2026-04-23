@@ -31,7 +31,7 @@ fun StatisticsCard(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 8.dp,
+                elevation = 4.dp,
                 shape = RoundedCornerShape(20.dp),
                 clip = false
             )
