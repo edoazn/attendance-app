@@ -16,5 +16,6 @@ data class AttendanceSession(
     val expiresAt: Long = System.currentTimeMillis(),
     val isActive: Boolean = true,
     val attendanceCount: Int = 0,
-    val lateThreshold: Int = 15 // in minutes
+    val lateThreshold: Int = 15, // in minutes
+    val description: String
 ) : Parcelable

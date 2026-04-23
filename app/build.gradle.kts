@@ -39,9 +39,21 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
+    }
 }
 
 dependencies {
+    constraints {
+        val kotlinVersion = libs.versions.kotlin.get()
+        implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-common:$kotlinVersion")
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlinVersion")
+        implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlinVersion")
+    }
 
     implementation(libs.androidx.core.ktx.v1131)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -66,21 +78,20 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.camera.view)
+    // Retrofit for networking
+    implementation("com.squareup.retrofit2:retrofit:3.0.0")
+    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.3.2")
     // guava
     implementation("com.google.guava:guava:32.1.2-android")
     // ML Kit Barcode Scanning
     implementation(libs.barcode.scanning)
     // Permission handling
     implementation("com.google.accompanist:accompanist-permissions:0.37.3")
-    // Firebase BOM
-    implementation(platform("com.google.firebase:firebase-bom:34.6.0"))
-    // Firestore
-    implementation(libs.com.google.firebase.firebase.firestore.ktx)
     // kotlinx coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     // Password hashing
     implementation("org.mindrot:jbcrypt:0.4")
-    // QR Code generation
-    implementation("com.google.zxing:core:3.5.2")
 }
