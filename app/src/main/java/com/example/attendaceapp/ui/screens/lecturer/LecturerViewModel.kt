@@ -3,7 +3,8 @@ package com.example.attendaceapp.ui.screens.lecturer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.attendaceapp.data.model.AttendanceSession
-import com.example.attendaceapp.data.repository.FirebaseRepository
+import com.example.attendaceapp.data.model.User
+import com.example.attendaceapp.data.repository.ApiRepository
 import com.example.attendaceapp.ui.state.LecturerUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,15 +18,20 @@ import java.util.UUID
 
 class LecturerViewModel : ViewModel() {
 
-    private val repository = FirebaseRepository()
+    private val repository = ApiRepository()
 
     private val _uiState = MutableStateFlow(LecturerUiState())
     val uiState: StateFlow<LecturerUiState> = _uiState.asStateFlow()
 
-    // Properti tambahan untuk kompatibilitas dengan UI yang baru
-    val sessions: StateFlow<List<AttendanceSession>> = MutableStateFlow(emptyList()) // Placeholder
-    val isLoading: StateFlow<Boolean> = MutableStateFlow(false) // Placeholder
-    val errorMessage: StateFlow<String?> = MutableStateFlow(null) // Placeholder
+    // Current logged in lecturer
+    private var currentLecturer: User? = null
+
+    fun setCurrentUser(user: User){
+        currentLecturer = user
+        if (user.id.isNotEmpty()){
+            loadActiveSessions(user.id)
+        }
+    }
 
     fun createStudent(
         nim: String,
@@ -60,35 +66,40 @@ class LecturerViewModel : ViewModel() {
     }
 
     fun createAttendanceSession(
-        courseId: String,
         courseName: String,
-        lecturerId: String,
-        lecturerName: String,
-        durationInMinutes: Int,
+        description: String = "",
+        durationInMinutes: Int = 60,
         lateThreshold: Int = 15
     ) {
         viewModelScope.launch {
+            if (currentLecturer == null){
+                _uiState.update { it.copy(error = "User tidak ditemukan") }
+                return@launch
+            }
+
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             val session = AttendanceSession(
-                id = UUID.randomUUID().toString(),
-                courseId = courseId,
+                id = "",
+                courseId = UUID.randomUUID().toString(),
                 courseName = courseName,
-                lecturerId = lecturerId,
-                lecturerName = lecturerName,
+                lecturerId = currentLecturer!!.id,
+                lecturerName = currentLecturer!!.name,
                 qrCode = UUID.randomUUID().toString(),
                 sessionDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(
                     Date()
                 ),
                 createdAt = System.currentTimeMillis(),
-                expiresAt = System.currentTimeMillis() + (durationInMinutes * 60 * 1000),
+                expiresAt = System.currentTimeMillis() + (durationInMinutes * 60 * 1000L),
                 isActive = true,
                 attendanceCount = 0,
-                lateThreshold = 15
+                lateThreshold = lateThreshold,
+                description = description
             )
 
             repository.createAttendanceSession(session).fold(
-                onSuccess = { createSession ->
+                onSuccess = { sessionId ->
+                    val createdSession = session.copy(id = sessionId)
                     _uiState.update { currentState ->
                         currentState.copy(
                             isLoading = false,
@@ -109,21 +120,18 @@ class LecturerViewModel : ViewModel() {
         }
     }
 
-    // Overload untuk kompatibilitas dengan UI yang baru
-    fun createAttendanceSession(subject: String, description: String) {
-        // Implementasi sementara atau sesuaikan dengan kebutuhan
-        // Misalnya menggunakan data dummy untuk lecturerId dll
-        createAttendanceSession(
-            courseId = "TEMP_ID",
-            courseName = subject,
-            lecturerId = "CURRENT_USER_ID", // Sebaiknya ambil dari User Session
-            lecturerName = "Current Lecturer",
-            durationInMinutes = 60
-        )
-    }
-
     fun deleteSession(sessionId: String) {
-        // Implementasi delete session
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+
+            // Remove from local state
+            _uiState.update { currentState ->
+                currentState.copy(
+                    activeSessions = currentState.activeSessions.filterNot { it.id == sessionId },
+                    isLoading = false,
+                )
+            }
+        }
     }
 
     fun loadActiveSessions(lecturerId: String) {

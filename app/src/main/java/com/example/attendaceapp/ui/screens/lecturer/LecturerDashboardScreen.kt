@@ -2,9 +2,11 @@ package com.example.attendaceapp.ui.screens.lecturer
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +42,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,10 +77,16 @@ fun LecturerDashboardScreen(
     onLogout: () -> Unit
 ) {
     val user by currentUser.collectAsState()
-    // Menggunakan uiState dari ViewModel yang sudah ada
     val uiState by viewModel.uiState.collectAsState()
 
-    // Mapping state dari uiState ke variabel lokal agar sesuai dengan kode UI
+    // Set current user in ViewModel
+    LaunchedEffect(user) {
+        if (user != null) {
+            viewModel.setCurrentUser(user!!)
+        }
+    }
+
+    // Extract UI state values
     val sessions = uiState.activeSessions
     val isLoading = uiState.isLoading
     val errorMessage = uiState.error
@@ -86,14 +95,13 @@ fun LecturerDashboardScreen(
     var showCreateSessionDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = Color.White // Background putih bersih
+        containerColor = Color.White
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // 1. Custom Header (Mirip HomePage)
                 item {
                     Box(
                         modifier = Modifier
@@ -225,7 +233,7 @@ fun LecturerDashboardScreen(
                                 .padding(horizontal = 24.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                text = errorMessage!!,
+                                text = errorMessage,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.padding(16.dp)
                             )
@@ -243,14 +251,13 @@ fun LecturerDashboardScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.DateRange,
+                                Image(
+                                    painter = painterResource(R.drawable.empty_img),
                                     contentDescription = null,
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(64.dp)
+                                    modifier = Modifier.size(180.dp)
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text("Belum ada sesi aktif", color = Color.Gray)
+                                Text("Belum ada sesi aktif", color = Color.Gray, fontSize = 18.sp)
                             }
                         }
                     }
@@ -274,8 +281,13 @@ fun LecturerDashboardScreen(
         if (showCreateSessionDialog) {
             CreateSessionDialog(
                 onDismiss = { showCreateSessionDialog = false },
-                onCreate = { subject, description ->
-                    viewModel.createAttendanceSession(subject, description)
+                onCreate = { courseName, description, duration, lateThreshold ->
+                    viewModel.createAttendanceSession(
+                        courseName = courseName,
+                        durationInMinutes = duration,
+                        lateThreshold = lateThreshold,
+                        description = description,
+                    )
                     showCreateSessionDialog = false
                 }
             )
@@ -289,10 +301,16 @@ fun QuickActionItem(
     label: String,
     onClick: () -> Unit
 ) {
+    val indication = LocalIndication.current
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clickable(onClick = onClick)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = indication,
+                onClick = onClick,
+            )
             .padding(4.dp)
     ) {
         Box(
@@ -327,11 +345,17 @@ fun SessionItem(
     onDelete: () -> Unit,
     onClick: () -> Unit
 ) {
+    val indication = LocalIndication.current
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 8.dp)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = indication,
+                onClick = onClick,
+            ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
@@ -393,43 +417,88 @@ fun SessionItem(
 @Composable
 fun CreateSessionDialog(
     onDismiss: () -> Unit,
-    onCreate: (String, String) -> Unit
+    onCreate: (String, String, Int, Int) -> Unit
 ) {
-    var subject by remember { mutableStateOf("") }
+    var courseName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var duration by remember { mutableStateOf("60") }
+    var lateThreshold by remember { mutableStateOf("15") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Buat Sesi Baru") },
+        title = {
+            Text(
+                "Buat Sesi Presensi Baru",
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
-            Column {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 OutlinedTextField(
-                    value = subject,
-                    onValueChange = { subject = it },
+                    value = courseName,
+                    onValueChange = { courseName = it },
                     label = { Text("Mata Kuliah") },
-                    modifier = Modifier.fillMaxWidth()
+                    placeholder = { Text("Contoh: Pemrograman Mobile") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Deskripsi (Opsional)") },
-                    modifier = Modifier.fillMaxWidth()
+                    label = { Text("Deskripsi") },
+                    placeholder = { Text("Contoh: Pertemuan 5 - Activity Lifecycle") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 2
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = duration,
+                        onValueChange = { duration = it.filter { char -> char.isDigit() } },
+                        label = { Text("Durasi (menit)") },
+                        placeholder = { Text("60") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+
+                    OutlinedTextField(
+                        value = lateThreshold,
+                        onValueChange = { lateThreshold = it.filter { char -> char.isDigit() } },
+                        label = { Text("Batas Telat") },
+                        placeholder = { Text("15") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                Text(
+                    text = "QR Code akan aktif selama ${duration.ifEmpty { "60" }} menit",
+                    fontSize = 12.sp,
+                    color = Color.Gray
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (subject.isNotBlank()) {
-                        onCreate(subject, description)
+                    if (courseName.isNotBlank()) {
+                        val durationInt = duration.toIntOrNull() ?: 60
+                        val lateThresholdInt = lateThreshold.toIntOrNull() ?: 15
+                        onCreate(courseName, description, durationInt, lateThresholdInt)
                     }
                 },
+                enabled = courseName.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colorResource(id = R.color.primary_color)
                 )
             ) {
-                Text("Buat")
+                Text("Buat Sesi")
             }
         },
         dismissButton = {
@@ -440,3 +509,4 @@ fun CreateSessionDialog(
         containerColor = Color.White
     )
 }
+

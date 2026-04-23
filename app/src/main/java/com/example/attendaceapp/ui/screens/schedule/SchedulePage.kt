@@ -2,98 +2,141 @@ package com.example.attendaceapp.ui.screens.schedule
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.attendaceapp.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SchedulePage(
     scheduleList: List<ScheduleItem>,
+    onPengajuanClick: () -> Unit,
+    onAbsensiClick: () -> Unit
 ) {
+    val contentHorizontalPadding = 20.dp
+    val colors = MaterialTheme.colorScheme
+
     var selectedDay by remember { mutableIntStateOf(0) }
+    var selectedItem by remember { mutableStateOf<ScheduleItem?>(null) }
+    var showPengajuanModal by remember { mutableStateOf(false) }
+    var showAbsensiModal by remember { mutableStateOf(false) }
 
     Scaffold(
-        containerColor = Color.White,
+        containerColor = colors.background,
         topBar = {
             TopAppBar(
                 title = { Text("Jadwal", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    titleContentColor = Color.Black,
+                    containerColor = colors.background,
+                    titleContentColor = colors.onBackground,
                 ),
                 windowInsets = WindowInsets(0, 0, 0, 0)
             )
         }
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(Color.White)
+                .background(colors.background)
         ) {
-            HorizontalDaySelector(
-                selectedIndex = selectedDay,
-                onDaySelected = { selectedDay = it }
-            )
-            Divider(color = Color.LightGray, thickness = 1.dp)
-
-            // Daftar jadwal
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = 8.dp)
+                    .padding(horizontal = contentHorizontalPadding)
             ) {
-                itemsIndexed(scheduleList) { index, item ->
-                    ScheduleTimelineItem(
-                        item = item,
-                        isFirst = index == 0,
-                        isLast = index == scheduleList.lastIndex
-                    )
+                HorizontalDaySelector(
+                    selectedIndex = selectedDay,
+                    onDaySelected = { selectedDay = it }
+                )
+                HorizontalDivider(color = colors.outlineVariant, thickness = 1.dp)
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                ) {
+                    itemsIndexed(scheduleList) { index, item ->
+                        ScheduleTimelineEventItem(
+                            item = item,
+                            isFirst = index == 0,
+                            isLast = index == scheduleList.lastIndex,
+                            onPengajuanClick = {
+                                selectedItem = item
+                                showPengajuanModal = true
+                            },
+                            onAbsensiClick = {
+                                selectedItem = item
+                                showAbsensiModal = true
+                            }
+                        )
+                    }
                 }
+            }
+
+            if (showPengajuanModal && selectedItem != null) {
+                PengajuanModal(
+                    item = selectedItem!!,
+                    onDismiss = { showPengajuanModal = false },
+                    onSubmit = {
+                        showPengajuanModal = false
+                        onPengajuanClick()
+                    }
+                )
+            }
+
+            if (showAbsensiModal && selectedItem != null) {
+                AbsensiModal(
+                    item = selectedItem!!,
+                    onDismiss = { showAbsensiModal = false },
+                    onConfirm = {
+                        showAbsensiModal = false
+                        onAbsensiClick()
+                    }
+                )
             }
         }
     }
@@ -114,11 +157,12 @@ data class ScheduleItem(
 @Composable
 fun HorizontalDaySelector(selectedIndex: Int, onDaySelected: (Int) -> Unit) {
     val days = listOf("Sen", "Sel", "Rab", "Kam", "Jum")
+    val indication = LocalIndication.current
+    val colors = MaterialTheme.colorScheme
 
     LazyRow(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly
     ) {
         itemsIndexed(days) { index, day ->
@@ -127,18 +171,22 @@ fun HorizontalDaySelector(selectedIndex: Int, onDaySelected: (Int) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable { onDaySelected(index) }
-                    .background(if (isSelected) Color(0xFF0066FF).copy(alpha = 0.1f) else Color.Transparent)
-                    .padding(8.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = indication,
+                    ) { onDaySelected(index) }
+                    .background(
+                        if (isSelected) colors.primary.copy(alpha = 0.12f) else Color.Transparent
+                    )
             ) {
                 Text(
                     text = day,
-                    color = if (isSelected) Color(0xFF0066FF) else Color.Gray,
+                    color = if (isSelected) colors.primary else colors.onSurfaceVariant,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
                 Text(
                     text = (index + 2).toString(),
-                    color = if (isSelected) Color(0xFF0066FF) else Color.Black,
+                    color = if (isSelected) colors.primary else colors.onSurface,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
             }
@@ -146,109 +194,6 @@ fun HorizontalDaySelector(selectedIndex: Int, onDaySelected: (Int) -> Unit) {
     }
 }
 
-@Composable
-fun ScheduleTimelineItem(
-    item: ScheduleItem,
-    isFirst: Boolean,
-    isLast: Boolean
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        // Kolom waktu
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(50.dp)
-        ) {
-            Text(item.startTime, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(item.endTime, fontSize = 11.sp, color = Color.Gray)
-        }
-        Spacer(modifier = Modifier.width(4.dp))
-
-        // Titik dan garis timeline
-        Box(
-            modifier = Modifier
-                .width(20.dp)
-                .height(IntrinsicSize.Min),
-            contentAlignment = Alignment.Center
-        ) {
-            // Garis vertikal nyambung antar item
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(2.dp)
-                    .background(Color(0xFF0066FF))
-                    .align(Alignment.Center)
-            )
-            // Titik biru
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .background(Color(0xFF0066FF), shape = RoundedCornerShape(6.dp))
-                    .align(Alignment.Center)
-            )
-        }
-        Spacer(modifier = Modifier.width(12.dp))
-        // Card konten
-        ScheduleCard(item)
-    }
-}
-
-@Composable
-fun ScheduleCard(item: ScheduleItem) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(end = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(4.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    item.subject,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.weight(1f))
-                if (item.isPresent) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = "Hadir",
-                        tint = Color(0xFF4CAF50)
-                    )
-                }
-            }
-
-            Text("${item.room} - ${item.mode}", color = Color.Gray)
-            Text(item.code, fontSize = 12.sp, color = Color.Gray)
-            Text(item.lecturer, fontSize = 12.sp, color = Color.Gray)
-            Spacer(Modifier.height(8.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { /*TODO*/ },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEDEDED))
-                ) {
-                    Text("Pengajuan", color = Color.Black)
-                }
-                Button(
-                    onClick = { /*TODO*/ },
-                    colors = ButtonDefaults.buttonColors(containerColor = colorResource(id = R.color.primary_color))
-                ) {
-                    Text("Absensi", color = Color.White)
-                }
-            }
-        }
-    }
-}
 
 @Preview
 @Composable
@@ -274,6 +219,160 @@ fun SchedulePagePreview() {
             lecturer = "Prof. Budi"
         ),
     )
-    SchedulePage(scheduleList = sampleSchedule)
+    SchedulePage(scheduleList = sampleSchedule, onPengajuanClick = {}, onAbsensiClick = {})
 }
 
+// Modal Pengajuan dan Absensi
+@Composable
+fun PengajuanModal(
+    item: ScheduleItem,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit
+) {
+    var alasan by remember { mutableStateOf("") }
+    val colors = MaterialTheme.colorScheme
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.scrim.copy(alpha = 0.5f))
+            .modalDismissClickable(onDismiss),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .modalContentClickBlocker()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = colors.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Pengajuan Izin", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(item.subject, color = colors.onSurfaceVariant, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = alasan,
+                    onValueChange = { alasan = it },
+                    label = { Text("Alasan ketidakhadiran") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(60.dp),
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Lampiran (opsional)")
+                    }
+
+                    Button(
+                        onClick = { onSubmit(alasan) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = alasan.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.primary
+                        )
+                    ) {
+                        Text("Kirim")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AbsensiModal(
+    item: ScheduleItem,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.scrim.copy(alpha = 0.5f))
+            .modalDismissClickable(onDismiss),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .modalContentClickBlocker()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Konfirmasi Absensi", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(item.subject, fontWeight = FontWeight.SemiBold)
+                Text("${item.startTime} - ${item.endTime}", color = colors.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Batal")
+                    }
+                    Button(
+                        onClick = onConfirm,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.primary
+                        )
+                    ) {
+                        Text("Lanjut")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Modifier.modalDismissClickable(onDismiss: () -> Unit): Modifier {
+    val indication = LocalIndication.current
+    return clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = indication,
+        onClick = onDismiss,
+    )
+}
+
+@Composable
+private fun Modifier.modalContentClickBlocker(): Modifier {
+    val indication = LocalIndication.current
+    return clickable(
+        enabled = false,
+        interactionSource = remember { MutableInteractionSource() },
+        indication = indication,
+        onClick = {},
+    )
+}
