@@ -23,6 +23,7 @@ import com.example.attendaceapp.ui.screens.history.HistoryPage
 import com.example.attendaceapp.ui.screens.home.HomePage
 import com.example.attendaceapp.ui.screens.profile.ProfilePage
 import com.example.attendaceapp.ui.screens.schedule.SchedulePage
+import com.example.attendaceapp.ui.state.AuthState
 
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
@@ -38,6 +39,16 @@ fun AppNavigation(
     navController: NavHostController = rememberNavController(),
     authViewModel: AuthViewModel = viewModel()
 ) {
+    // Baca nilai awal authState secara sinkron (sudah di-set oleh restoreSession() di init).
+    // 'remember' memastikan nilai ini hanya dievaluasi sekali saat composable pertama kali dibuat.
+    val startDestination = remember {
+        if (authViewModel.authState.value is AuthState.Success) {
+            Screen.StudentDashboard.route
+        } else {
+            Screen.Login.route
+        }
+    }
+
     val bottomDestinations = remember {
         setOf(
             Screen.StudentDashboard.route,
@@ -80,7 +91,7 @@ fun AppNavigation(
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Login.route,
+            startDestination = startDestination,
             modifier = Modifier.padding(padding)
         ) {
             // AUTH
