@@ -23,46 +23,12 @@ class StudentViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-
-            repository.recordAttendance(
-                sessionId = sessionId,
-                studentNIM = studentNIM,
-                studentName = studentName,
-            ).fold(
-                onSuccess = { record ->
-                    _uiState.update { currentState ->
-                        currentState.copy(
-                            isLoading = false,
-                            attendanceHistory = currentState.attendanceHistory + record,
-                            lastRecordedAttendance = record,
-                            successMessage = "Presensi berhasil direkam"
-                        )
-                    }
-                },
-                onFailure = { exception ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            lastRecordedAttendance = null,
-                            error = exception.message ?: "Gagal mencatat presensi"
-                        )
-                    }
-                }
-            )
         }
     }
 
     fun loadAttendanceHistory(studentNIM: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-
-            val records = repository.getStudentAttendanceHistory(studentNIM)
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    attendanceHistory = records
-                )
-            }
         }
     }
 

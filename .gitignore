@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Windows reserved device names (cannot be indexed by Git on Windows)
+nul
+con
+prn
+aux

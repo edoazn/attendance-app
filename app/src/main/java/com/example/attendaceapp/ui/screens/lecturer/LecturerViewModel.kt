@@ -26,9 +26,9 @@ class LecturerViewModel : ViewModel() {
     // Current logged in lecturer
     private var currentLecturer: User? = null
 
-    fun setCurrentUser(user: User){
+    fun setCurrentUser(user: User) {
         currentLecturer = user
-        if (user.id.isNotEmpty()){
+        if (user.id.isNotEmpty()) {
             loadActiveSessions(user.id)
         }
     }
@@ -41,27 +41,12 @@ class LecturerViewModel : ViewModel() {
         password: String
     ) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            if (currentLecturer == null) {
+                _uiState.update { it.copy(error = "User tidak ditemukan") }
+                return@launch
+            }
 
-            repository.createStudent(nim, name, email, department, password).fold(
-                onSuccess = {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            successMessage = "Berhasil menambahkan mahasiswa"
-                        )
-                    }
-                },
-                onFailure = { exception ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = exception.message
-                                ?: "Terjadi kesalahan saat menambahkan mahasiswa"
-                        )
-                    }
-                }
-            )
+            _uiState.update { it.copy(isLoading = true, error = null) }
         }
     }
 
@@ -72,7 +57,7 @@ class LecturerViewModel : ViewModel() {
         lateThreshold: Int = 15
     ) {
         viewModelScope.launch {
-            if (currentLecturer == null){
+            if (currentLecturer == null) {
                 _uiState.update { it.copy(error = "User tidak ditemukan") }
                 return@launch
             }
@@ -97,26 +82,6 @@ class LecturerViewModel : ViewModel() {
                 description = description
             )
 
-            repository.createAttendanceSession(session).fold(
-                onSuccess = { sessionId ->
-                    val createdSession = session.copy(id = sessionId)
-                    _uiState.update { currentState ->
-                        currentState.copy(
-                            isLoading = false,
-                            activeSessions = currentState.activeSessions + session,
-                            successMessage = "Sesi presensi berhasil dibuat"
-                        )
-                    }
-                },
-                onFailure = { exception ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = exception.message ?: "Gagal membuat sesi presensi"
-                        )
-                    }
-                }
-            )
         }
     }
 

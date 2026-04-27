@@ -1,6 +1,7 @@
 package com.example.attendaceapp.ui.screens.auth
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.attendaceapp.data.model.User
 import com.example.attendaceapp.data.repository.ApiRepository
@@ -10,8 +11,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class AuthViewModel : ViewModel() {
-    private val repository = ApiRepository()
+/**
+ * ViewModel untuk autentikasi.
+ * Extend [AndroidViewModel] agar bisa akses [Application] context
+ * untuk menyimpan token ke SharedPreferences via [ApiRepository].
+ */
+class AuthViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = ApiRepository(context = application)
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -38,6 +45,7 @@ class AuthViewModel : ViewModel() {
     }
 
     fun logout() {
+        repository.clearSession()
         _currentUser.value = null
         _authState.value = AuthState.Idle
     }
