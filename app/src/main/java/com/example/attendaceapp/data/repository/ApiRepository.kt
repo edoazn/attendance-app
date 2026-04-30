@@ -15,10 +15,7 @@ class ApiRepository(
 
     /**
      * Login dengan NIM & password.
-     * Mengembalikan [Result.success] berisi [User] bila berhasil,
-     * atau [Result.failure] berisi exception dengan pesan error bila gagal.
-     *
-     * Token & data user otomatis disimpan ke [UserPreferences] bila context tersedia.
+     * Token & data user otomatis disimpan ke UserPreferences bila context tersedia.
      */
     suspend fun login(nim: String, password: String): Result<User> {
         return try {
@@ -46,11 +43,11 @@ class ApiRepository(
                         context?.let { ctx ->
                             val prefs = UserPreferences.getInstance(ctx)
                             prefs.authToken = loginData.token
-                            prefs.userId    = user.id
-                            prefs.userName  = user.name
-                            prefs.userNim   = user.nim
+                            prefs.userId = user.id
+                            prefs.userName = user.name
+                            prefs.userNim = user.nim
                             prefs.userEmail = user.email
-                            prefs.userRole  = user.role.name
+                            prefs.userRole = user.role.name
                         }
 
                         Result.success(user)
@@ -71,9 +68,8 @@ class ApiRepository(
         }
     }
 
-    /**
-     * Hapus token & data sesi lokal (logout).
-     */
+
+    // Hapus token & data sesi lokal (logout).
     fun clearSession() {
         context?.let { UserPreferences.getInstance(it).clear() }
     }

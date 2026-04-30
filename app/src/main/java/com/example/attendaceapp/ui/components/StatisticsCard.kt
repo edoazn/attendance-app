@@ -54,7 +54,7 @@ fun StatisticsCard(modifier: Modifier = Modifier) {
                 color = colorResource(id = R.color.primary_color),
             )
             StatisticItem(
-                label = "Sakit",
+                label = "Tidak Hadir",
                 percentage = 5,
                 color = colorResource(id = R.color.primary_color),
             )
