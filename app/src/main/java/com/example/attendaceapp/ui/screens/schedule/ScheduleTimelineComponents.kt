@@ -41,6 +41,7 @@ import com.example.attendaceapp.ui.theme.Gray200
 import com.example.attendaceapp.ui.theme.Gray400
 import com.example.attendaceapp.ui.theme.PrimaryColor
 import com.example.attendaceapp.ui.theme.WhiteColor
+import com.example.attendaceapp.data.remote.response.ScheduleDto
 import java.util.Calendar
 
 private val TimelineItemVerticalSpacing = 8.dp
@@ -54,6 +55,37 @@ private enum class TimelineStatus {
     UPCOMING,
 }
 
+/**
+ * Overload utama yang menerima [ScheduleDto] langsung dari API.
+ */
+@Composable
+fun ScheduleTimelineEventItem(
+    dto: ScheduleDto,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onPengajuanClick: () -> Unit,
+    onAbsensiClick: () -> Unit,
+) {
+    val timelineStatus = rememberTimelineStatus(dto.startTimeShort(), dto.endTimeShort())
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+    ) {
+        ScheduleTimeColumn(
+            startTime = dto.startTimeShort(),
+            endTime = dto.endTimeShort()
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        ScheduleTimelineAxis(isFirst = isFirst, isLast = isLast, status = timelineStatus)
+        Spacer(modifier = Modifier.width(12.dp))
+        ScheduleTimelineCardDto(dto = dto, onPengajuanClick = onPengajuanClick, onAbsensiClick = onAbsensiClick)
+    }
+}
+
+/** Overload lama — dipertahankan agar preview dan kode yang belum dimigrasikan tetap compile. */
 @Composable
 fun ScheduleTimelineEventItem(
     item: ScheduleItem,
@@ -74,22 +106,10 @@ fun ScheduleTimelineEventItem(
             startTime = item.startTime,
             endTime = item.endTime
         )
-
         Spacer(modifier = Modifier.width(4.dp))
-
-        ScheduleTimelineAxis(
-            isFirst = isFirst,
-            isLast = isLast,
-            status = timelineStatus
-        )
-
+        ScheduleTimelineAxis(isFirst = isFirst, isLast = isLast, status = timelineStatus)
         Spacer(modifier = Modifier.width(12.dp))
-
-        ScheduleTimelineCard(
-            item = item,
-            onPengajuanClick = onPengajuanClick,
-            onAbsensiClick = onAbsensiClick
-        )
+        ScheduleTimelineCard(item = item, onPengajuanClick = onPengajuanClick, onAbsensiClick = onAbsensiClick)
     }
 }
 
@@ -259,3 +279,89 @@ fun ScheduleTimelineCard(
     }
 }
 
+/**
+ * Card timeline untuk [ScheduleDto] (data real dari API).
+ * Menampilkan badge status aktif, QR tersedia, atau kode tersedia.
+ */
+@Composable
+fun ScheduleTimelineCardDto(
+    dto: ScheduleDto,
+    onPengajuanClick: () -> Unit,
+    onAbsensiClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 8.dp, end = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = WhiteColor)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    dto.courseName ?: "—",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                // Badge "Aktif" jika is_active
+                if (dto.isActive == true) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier
+                            .background(Color(0xFF4CAF50).copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text("Aktif", fontSize = 11.sp, color = Color(0xFF4CAF50), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(2.dp))
+            Text(dto.room ?: "—", color = Gray400, fontSize = 13.sp)
+            Text(dto.lecturerName ?: "—", fontSize = 12.sp, color = Gray400)
+
+            // Indikator metode yang tersedia
+            if (dto.hasQr == true || dto.hasActiveCode == true) {
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (dto.hasQr == true) {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .background(PrimaryColor.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("📷 QR", fontSize = 11.sp, color = PrimaryColor)
+                        }
+                    }
+                    if (dto.hasActiveCode == true) {
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier
+                                .background(Color(0xFF9C27B0).copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("🔑 Kode", fontSize = 11.sp, color = Color(0xFF9C27B0))
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onPengajuanClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Gray200)
+                ) {
+                    Text("Pengajuan", color = BlackColor)
+                }
+                Button(
+                    onClick = onAbsensiClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor)
+                ) {
+                    Text("Absensi", color = WhiteColor)
+                }
+            }
+        }
+    }
+}

@@ -3,10 +3,12 @@ package com.example.attendaceapp.ui.navigation
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -15,7 +17,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.attendaceapp.data.local.DummyData
 import com.example.attendaceapp.ui.screens.attendace.AttendancePage
 import com.example.attendaceapp.ui.screens.auth.AuthViewModel
 import com.example.attendaceapp.ui.screens.auth.LoginPage
@@ -23,12 +24,15 @@ import com.example.attendaceapp.ui.screens.history.HistoryPage
 import com.example.attendaceapp.ui.screens.home.HomePage
 import com.example.attendaceapp.ui.screens.profile.ProfilePage
 import com.example.attendaceapp.ui.screens.schedule.SchedulePage
+import com.example.attendaceapp.ui.screens.schedule.ScheduleViewModel
 import com.example.attendaceapp.ui.state.AuthState
 
 sealed class Screen(val route: String) {
     data object Login : Screen("login")
     data object StudentDashboard : Screen("student_dashboard")
-    data object Schedule : Screen("schedule")
+    data object Schedule : Screen("schedule?day={day}"){
+        fun createRoute(day: String) = "schedule?day=$day"
+    }
     data object Attendance : Screen("attendance")
     data object History : Screen("history")
     data object Profile : Screen("profile")
@@ -62,6 +66,16 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination: NavDestination? = navBackStackEntry?.destination
     val showBottomBar = currentDestination?.route in bottomDestinations
+
+    val authState by authViewModel.authState.collectAsState()
+    LaunchedEffect(authState, currentDestination?.route) {
+        if (authState is AuthState.Idle && currentDestination?.route != Screen.Login.route) {
+            navController.navigate(Screen.Login.route) {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -110,20 +124,43 @@ fun AppNavigation(
             // STUDENT ROUTES
             composable(Screen.StudentDashboard.route) {
                 val currentUser by authViewModel.currentUser.collectAsState()
-
+                val ctx = LocalContext.current
                 HomePage(
-                    user = currentUser
+                    user = currentUser,
+                    onSeeAllSchedules = {
+                        navController.navigate(Screen.Schedule.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    scheduleViewModel = viewModel(
+                        factory = ScheduleViewModel.factory(ctx)
+                    )
                 )
             }
 
-            composable(Screen.Schedule.route) {
-                SchedulePage(scheduleList = DummyData.scheduleList, onPengajuanClick = {}, onAbsensiClick = {})
+            composable(Screen.Schedule.route) { navBackStackEntry ->
+                val dayArg = navBackStackEntry.arguments?.getString("day")
+                val ctx = LocalContext.current
+                SchedulePage(
+                    viewModel = viewModel(factory = ScheduleViewModel.factory(ctx)),
+                    onNavigateToAttendance = {
+                        navController.navigate(Screen.Attendance.route) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
             }
             composable(Screen.Attendance.route) {
                 val currentUser by authViewModel.currentUser.collectAsState()
+                val ctx = LocalContext.current
                 currentUser?.let { user ->
                     AttendancePage(
                         currentUser = user,
+                        viewModel = viewModel(
+                            factory = com.example.attendaceapp.ui.screens.student.StudentViewModel.factory(ctx)
+                        ),
                         onNavigateBack = { navController.popBackStack() }
                     )
                 }
@@ -132,7 +169,7 @@ fun AppNavigation(
                 HistoryPage()
             }
             composable(Screen.Profile.route) {
-                ProfilePage()
+                ProfilePage(viewModel = authViewModel)
             }
         }
     }

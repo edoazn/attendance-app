@@ -1,7 +1,6 @@
 package com.example.attendaceapp.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -10,27 +9,40 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.attendaceapp.R
+import com.example.attendaceapp.data.remote.response.ScheduleDto
 
+/**
+ * Kartu jadwal ringkas yang ditampilkan di HomePage.
+ *
+ * Bisa dipakai dengan data real [ScheduleDto] maupun nilai default (preview/fallback).
+ */
 @Composable
 fun ScheduleCard(
     modifier: Modifier = Modifier,
-    image: Painter = painterResource(R.drawable.ic_google),
-    matkul: String = "Matematika Diskrit",
-    time: String = "Senin, 10.00 - 12.00",
-    room: String = "U512"
+    schedule: ScheduleDto? = null,
+    // Fallback values untuk preview / keadaan darurat
+    matkul: String = schedule?.courseName ?: "Mata Kuliah",
+    time: String = if (schedule != null)
+        "${schedule.startTimeShort()} - ${schedule.endTimeShort()}"
+    else "—",
+    room: String = schedule?.room ?: "—",
+    lecturer: String = schedule?.lecturerName ?: "",
+    onScheduleClick: () -> Unit,
 ) {
     Box(
         modifier = modifier
@@ -49,45 +61,58 @@ fun ScheduleCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Matkul Icon
+            // Ikon matkul
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(color = colorResource(id = R.color.primary_color).copy(alpha = 0.1f))
-                    .padding(12.dp),
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(color = colorResource(id = R.color.primary_color).copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center,
             ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_google),
+                Icon(
+                    imageVector = Icons.Default.Menu,
                     contentDescription = "Matkul Icon",
-                    modifier = Modifier,
+                    tint = colorResource(id = R.color.primary_color),
+                    modifier = Modifier.size(24.dp)
                 )
             }
-            // Left Side
+
+            // Info matkul
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(start = 16.dp)
+                    .padding(start = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = "Matematika Diskrit",
-                    fontSize = 16.sp,
+                    text = matkul,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = colorResource(id = R.color.black),
+                    maxLines = 1,
                 )
                 Text(
-                    text = "Senin, 10.00 - 12.00",
-                    fontSize = 14.sp,
+                    text = time,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Normal,
                     color = colorResource(id = R.color.gray_400),
                 )
+                if (lecturer.isNotBlank()) {
+                    Text(
+                        text = lecturer,
+                        fontSize = 11.sp,
+                        color = colorResource(id = R.color.gray_400),
+                        maxLines = 1,
+                    )
+                }
             }
-            // Right Side
-            // Class Room
+
+            // Ruangan
             Text(
-                text = "U512",
-                fontSize = 14.sp,
+                text = room,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = colorResource(id = R.color.gray_400),
+                color = colorResource(id = R.color.primary_color),
             )
         }
     }
