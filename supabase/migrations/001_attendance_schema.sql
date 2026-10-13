@@ -106,6 +106,10 @@ AS $$
   );
 $$;
 GRANT EXECUTE ON FUNCTION public.is_lecturer() TO authenticated;
+-- Fungsi berjalan SECURITY DEFINER: cabut akses dari PUBLIC/anon agar hanya
+-- penelepon terautentikasi yang bisa memakainya (default Postgres me-grant
+-- EXECUTE ke PUBLIC saat CREATE FUNCTION).
+REVOKE EXECUTE ON FUNCTION public.is_lecturer() FROM PUBLIC, anon;
 
 -- ----------------------------------------------------------------- policies
 -- 1. profiles: select own.

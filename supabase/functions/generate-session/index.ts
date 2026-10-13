@@ -13,6 +13,7 @@ import {
   ERR_SESI_TIDAK_LENGKAP,
   ERR_UMUM,
   generateAttendanceCode,
+  isSchedulableForNewSession,
 } from "../_shared/attendance.ts";
 
 const corsHeaders = {
@@ -87,13 +88,15 @@ Deno.serve(async (req) => {
       return json({ error: ERR_DOSEN_SAJA }, 403);
     }
 
-    // 3. Jadwal harus ada.
+    // 3. Jadwal harus ada DAN aktif (jadwal arsip tidak dapat sesi baru).
     const { data: schedule } = await admin
       .from("schedules")
-      .select("id")
+      .select("id, is_active")
       .eq("id", scheduleId)
       .maybeSingle();
-    if (!schedule) return json({ error: ERR_JADWAL_TIDAK_AKTIF }, 404);
+    if (!isSchedulableForNewSession(schedule)) {
+      return json({ error: ERR_JADWAL_TIDAK_AKTIF }, 404);
+    }
 
     // 4. Tulis sesi (server now + durasi).
     const expiresAt = buildSessionExpiry(new Date(), durationMinutes)

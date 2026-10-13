@@ -72,7 +72,7 @@ ON CONFLICT (code) DO UPDATE SET
 
 -- ------------------------------------------------------- attendance_records (milik B di jadwal 1)
 INSERT INTO public.attendance_records (schedule_id, student_id, method, status, distance) VALUES
-  (1, '22222222-2222-2222-2222-222222222222', 'QR', 'HADIR', 25.5)
+  (1, '22222222-2222-2222-2222-222222222222', 'qr_code', 'HADIR', 25.5)
 ON CONFLICT (schedule_id, student_id) DO NOTHING;
 
 -- ------------------------------------------------------- permit_requests (milik A di jadwal 2)

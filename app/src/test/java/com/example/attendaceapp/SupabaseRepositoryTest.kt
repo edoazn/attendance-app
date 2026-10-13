@@ -1,8 +1,6 @@
 package com.example.attendaceapp
 
-import com.example.attendaceapp.data.model.User
 import com.example.attendaceapp.data.model.UserRole
-import com.example.attendaceapp.data.repository.SessionStore
 import com.example.attendaceapp.data.repository.SupabaseRepository
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -143,22 +141,5 @@ class SupabaseRepositoryTest {
             "Kehadiran sudah tercatat untuk jadwal ini.",
             result.exceptionOrNull()?.message
         )
-    }
-
-    class FakeSessionStore : SessionStore {
-        @JvmField var token: String? = null
-        var user: User? = null
-
-        override fun getToken(): String? = token
-
-        override fun save(token: String, user: User) {
-            this.token = token
-            this.user = user
-        }
-
-        override fun clear() {
-            token = null
-            user = null
-        }
     }
 }

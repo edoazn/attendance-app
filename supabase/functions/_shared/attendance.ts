@@ -301,6 +301,18 @@ export function loginErrorMessage(_reason: LoginFailureReason): string {
 }
 
 // ---------------------------------------------------------------- sesi dosen
+/**
+ * Guard jadwal aktif untuk generate-session: jadwal arsip (is_active=false)
+ * atau hilang (null) TIDAK boleh mendapat qr_token/code baru.
+ * Dipakai handler generate-session; diuji di
+ * supabase/functions/tests/generate_session_test.ts.
+ */
+export function isSchedulableForNewSession(
+  schedule: { is_active: boolean } | null,
+): boolean {
+  return schedule != null && schedule.is_active === true;
+}
+
 export function buildSessionExpiry(now: Date, durationMinutes: number): Date {
   return new Date(now.getTime() + durationMinutes * 60_000);
 }

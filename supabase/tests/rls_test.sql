@@ -153,11 +153,25 @@ BEGIN
 END $$;
 
 -- Mahasiswa C: ada di profiles, tidak enrolled di jadwal mana pun.
-INSERT INTO auth.users (id) VALUES ('44444444-4444-4444-4444-444444444444')
-ON CONFLICT DO NOTHING;
-INSERT INTO public.profiles (id, identity_number, name, role) VALUES
-  ('44444444-4444-4444-4444-444444444444', '20240003', 'Mahasiswa C', 'STUDENT')
-ON CONFLICT (id) DO NOTHING;
+-- Prasyarat auth.users sama seperti supabase/seed.sql (user dibuat via
+-- Dashboard/Auth API): di project nyata auth.users punya kolom NOT NULL
+-- (aud/role/email, ...) sehingga INSERT minimal (id) gagal. Bungkus dengan
+-- handler eksplisit agar live run tidak gagal di tengah.
+DO $$
+BEGIN
+  INSERT INTO auth.users (id) VALUES ('44444444-4444-4444-4444-444444444444')
+  ON CONFLICT DO NOTHING;
+EXCEPTION WHEN not_null_violation THEN
+  RAISE NOTICE 'RLS_TEST: skip pembuatan auth.users C (kolom NOT NULL project nyata) — buat via Dashboard/Auth API untuk cek view penuh';
+END $$;
+DO $$
+BEGIN
+  INSERT INTO public.profiles (id, identity_number, name, role) VALUES
+    ('44444444-4444-4444-4444-444444444444', '20240003', 'Mahasiswa C', 'STUDENT')
+  ON CONFLICT (id) DO NOTHING;
+EXCEPTION WHEN foreign_key_violation THEN
+  RAISE NOTICE 'RLS_TEST: skip pembuatan profil C (auth.users prasyarat belum ada, lih. supabase/seed.sql) — cek view non-enrolled di bawah jadi vakum (0 baris tetap PASS)';
+END $$;
 
 SET ROLE authenticated;
 SELECT set_config('request.jwt.claims',

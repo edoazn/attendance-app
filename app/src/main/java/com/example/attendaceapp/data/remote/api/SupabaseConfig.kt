@@ -1,5 +1,7 @@
 package com.example.attendaceapp.data.remote.api
 
+import com.example.attendaceapp.BuildConfig
+
 /**
  * Konstanta terpusat untuk backend Supabase.
  *
@@ -22,8 +24,11 @@ object SupabaseConfig {
     const val REST_URL = "$SUPABASE_URL/rest/v1"
 
     /**
-     * Anon key Supabase. Kosong sampai kredensial backend tersedia;
-     * di-inject via konstruktor repository (jangan commit key ke repo).
+     * Anon key Supabase — di-inject saat build TANPA ubah kode dan TANPA
+     * commit secret ke repo. Urutan sumber (lihat app/build.gradle.kts):
+     * env `SUPABASE_ANON_KEY` → `supabase.anonKey` di `local.properties`
+     * (jangan commit file bila berisi key) → default "" (mode tanpa
+     * backend, sama seperti sebelumnya).
      */
-    const val ANON_KEY = ""
+    val ANON_KEY: String = BuildConfig.SUPABASE_ANON_KEY
 }

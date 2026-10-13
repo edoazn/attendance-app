@@ -1,8 +1,5 @@
 package com.example.attendaceapp
 
-import com.example.attendaceapp.data.model.User
-import com.example.attendaceapp.data.model.UserRole
-import com.example.attendaceapp.data.repository.SessionStore
 import com.example.attendaceapp.data.repository.SupabaseRepository
 import com.example.attendaceapp.ui.screens.history.HistoryUiState
 import com.example.attendaceapp.ui.screens.history.HistoryViewModel
@@ -102,22 +99,5 @@ class HistoryProfileTest {
             "Sesi login tidak ditemukan. Silakan login ulang.",
             result.exceptionOrNull()?.message
         )
-    }
-
-    class FakeSessionStore : SessionStore {
-        @JvmField var token: String? = null
-        var user: User? = null
-
-        override fun getToken(): String? = token
-
-        override fun save(token: String, user: User) {
-            this.token = token
-            this.user = user
-        }
-
-        override fun clear() {
-            token = null
-            user = null
-        }
     }
 }

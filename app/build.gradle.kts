@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,17 @@ plugins {
     id("com.google.gms.google-services")
     id("kotlin-parcelize")
 }
+
+// Anon key Supabase TANPA nilai secret di repo: diambil dari env
+// SUPABASE_ANON_KEY, fallback ke supabase.anonKey di local.properties,
+// default "" (mode tanpa backend). Jangan commit key apapun.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use(::load)
+}
+val supabaseAnonKey: String =
+    System.getenv("SUPABASE_ANON_KEY")
+        ?: localProps.getProperty("supabase.anonKey", "")
 
 android {
     namespace = "com.example.attendaceapp"
@@ -18,6 +31,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     buildTypes {
@@ -38,6 +53,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
