@@ -1,6 +1,6 @@
 # Desain Dashboard Fase 2: Web Dosen + Admin
 
-**Status:** brainstorming 2026-10-13 dengan pemilik — menunggu persetujuan dokumen.
+**Status:** brainstorming 2026-10-13 dengan pemilik — PUTUSAN BUILDER-CHECK MASUK, menunggu persetujuan akhir dokumen.
 
 ## Intent & Why
 
@@ -78,19 +78,38 @@ untuk dosen + pengatur master data untuk admin/TU.
    85/5/15) dihitung dari sumber rekap yang sama nanti. (pemilik)
 7. Scope Fase 2 = dashboard saja; tanpa ubahan aplikasi mahasiswa.
    (pemilik)
+8. Enrollment paket-per-rombel = kolom `rombel` di `profiles` + UI bulk
+   enroll (tanpa tabel baru). (pemilik, putusan builder-check)
+9. Dosen read-only atas master; wewenang tulisnya hanya sesi (ON/OFF).
+   (pemilik, putusan builder-check)
+10. Approve izin = Edge Function baru yang menulis baris
+    `attendance_records` berstatus `IZIN` (`method='izin'`,
+    `session_id` NULL); yang boleh approve dosen pemilik + admin.
+    (pemilik, putusan builder-check)
+11. Rumus rekap: persen = HADIR / total sesi; IZIN kolom tersendiri,
+    tidak mengangkat persen. (pemilik, putusan builder-check)
+12. Tambah user = Edge Function akun (bikin `auth.users` + `profiles`
+    sekaligus); admin pertama via script setup interaktif sekali jalan.
+    (pemilik, putusan builder-check)
+13. Kode dashboard di repo terpisah (bukan folder di repo ini).
+    (pemilik, putusan builder-check)
 
 ## Disiapkan untuk builder (my call)
 
-- Antrean approve izin ikut Fase 2 (baca/tulis `permit_requests.status`
-  via policy admin/dosen-pemilik) meski form mobile-nya menyusul — UI-nya
-  kecil dan kolomnya sudah ada.
 - Rekap dihitung dari `attendance_records` + `attendance_sessions` +
-  izin approved; Excel dibuat client-side (tanpa lib berat, mis. SheetJS —
-  builder boleh ganti dengan alasan).
+  izin (`status='IZIN'` kolom sendiri); Excel dibuat client-side (tanpa
+  lib berat, mis. SheetJS — builder boleh ganti dengan alasan).
 - Mobile stats nanti pakai endpoint/view rekap yang sama (tanpa ubah
   kontrak): sediakan view `attendance_summary` sekalian di migrasi peran.
 - Cetak QR = unduh PNG dari token statis (string token mentah, sama
   seperti yang di-scan HP).
+- Baris `IZIN` dari approve memakai `session_id` NULL (permintaan izin
+  tidak terikat sesi spesifik) dan dihitung di kolom IZIN, bukan HADIR —
+  ini yang mendamaikan putusan 10 + 11.
+- `login-with-nim` jalan tanpa ubahan untuk `role='ADMIN'` (lookup
+  NIM→email→signIn tidak peduli peran).
+- Penyebut persen = jumlah baris `attendance_sessions` per jadwal; baris
+  legacy `session_id IS NULL` (pra-Fase-1) dihitung 1 hadir + 1 penyebut.
 
 ## Diserahkan ke builder
 
