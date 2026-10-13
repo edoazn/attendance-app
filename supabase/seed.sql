@@ -53,9 +53,14 @@ INSERT INTO public.enrollments (schedule_id, student_id) VALUES
   (2, '11111111-1111-1111-1111-111111111111')
 ON CONFLICT DO NOTHING;
 
--- ------------------------------------------------------- qr_tokens (1 valid untuk jadwal 1)
-INSERT INTO public.qr_tokens (schedule_id, expires_at) VALUES
-  (1, now() + interval '2 hours');
+-- ------------------------------------------------------- qr_tokens (1 valid stabil untuk jadwal 1)
+-- Token UUID deterministik + ON CONFLICT DO UPDATE: re-run seed me-refresh
+-- expiry tanpa menambah baris duplikat.
+INSERT INTO public.qr_tokens (token, schedule_id, expires_at) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1, now() + interval '2 hours')
+ON CONFLICT (token) DO UPDATE SET
+  schedule_id = EXCLUDED.schedule_id,
+  expires_at = EXCLUDED.expires_at;
 
 -- ------------------------------------------------------- attendance_codes (1 aktif untuk jadwal 1)
 INSERT INTO public.attendance_codes (code, schedule_id, expires_at, is_active) VALUES
@@ -71,6 +76,12 @@ INSERT INTO public.attendance_records (schedule_id, student_id, method, status, 
 ON CONFLICT (schedule_id, student_id) DO NOTHING;
 
 -- ------------------------------------------------------- permit_requests (milik A di jadwal 2)
-INSERT INTO public.permit_requests (schedule_id, student_id, alasan) VALUES
-  (2, '11111111-1111-1111-1111-111111111111', 'Sakit — surat dokter terlampir')
-ON CONFLICT DO NOTHING;
+-- Id eksplisit + ON CONFLICT (id): idempoten nyata. (ON CONFLICT DO NOTHING
+-- tanpa arbiter tidak pernah trigger di tabel ini karena PK id selalu baru.)
+INSERT INTO public.permit_requests (id, schedule_id, student_id, alasan) VALUES
+  (1, 2, '11111111-1111-1111-1111-111111111111', 'Sakit — surat dokter terlampir')
+ON CONFLICT (id) DO UPDATE SET
+  schedule_id = EXCLUDED.schedule_id,
+  student_id = EXCLUDED.student_id,
+  alasan = EXCLUDED.alasan;
+SELECT setval(pg_get_serial_sequence('public.permit_requests', 'id'), 100);

@@ -137,4 +137,44 @@ BEGIN
   RAISE NOTICE 'RLS_TEST: view OK (% baris, flags jadwal 1 benar)', c;
 END $$;
 
+-- 7. View security_invoker: katalog + student non-enrolled melihat 0 baris.
+--    Tanpa security_invoker=true, view jalan sebagai owner dan membocorkan
+--    semua jadwal hari ini ke siapa pun yang punya GRANT.
+DO $$
+DECLARE opts text[];
+BEGIN
+  SELECT reloptions INTO opts FROM pg_class
+  WHERE relnamespace = 'public'::regnamespace
+    AND relname = 'today_schedules_with_flags';
+  IF opts IS NULL OR NOT ('security_invoker=true' = ANY (opts)) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: view tanpa security_invoker=true (reloptions=%)', opts;
+  END IF;
+  RAISE NOTICE 'RLS_TEST: view security_invoker=true OK';
+END $$;
+
+-- Mahasiswa C: ada di profiles, tidak enrolled di jadwal mana pun.
+INSERT INTO auth.users (id) VALUES ('44444444-4444-4444-4444-444444444444')
+ON CONFLICT DO NOTHING;
+INSERT INTO public.profiles (id, identity_number, name, role) VALUES
+  ('44444444-4444-4444-4444-444444444444', '20240003', 'Mahasiswa C', 'STUDENT')
+ON CONFLICT (id) DO NOTHING;
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claims',
+  '{"sub": "44444444-4444-4444-4444-444444444444"}', false);
+DO $$
+DECLARE c int;
+BEGIN
+  SELECT COUNT(*) INTO c FROM public.today_schedules_with_flags;
+  IF c <> 0 THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: non-enrolled melihat % baris via view', c;
+  END IF;
+  RAISE NOTICE 'RLS_TEST: non-enrolled 0 baris via view OK';
+END $$;
+RESET ROLE;
+RESET "request.jwt.claims";
+-- Bersihkan akun uji agar seed/test idempoten.
+DELETE FROM public.profiles WHERE id = '44444444-4444-4444-4444-444444444444';
+DELETE FROM auth.users WHERE id = '44444444-4444-4444-4444-444444444444';
+
 SELECT 'RLS_TEST_PASS' AS result;

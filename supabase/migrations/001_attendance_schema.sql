@@ -202,7 +202,12 @@ GRANT SELECT ON public.attendance_records TO authenticated;
 GRANT SELECT, INSERT ON public.permit_requests TO authenticated;
 
 -- ------------------------------------------------- view jadwal hari ini
-CREATE OR REPLACE VIEW public.today_schedules_with_flags AS
+-- WITH (security_invoker = true): view tunduk pada RLS penelepon. Tanpa ini
+-- view berjalan sebagai owner (bypass RLS schedules/qr_tokens/
+-- attendance_codes) dan GRANT SELECT ke authenticated membocorkan semua
+-- jadwal hari ini ke student yang tidak enrolled.
+CREATE OR REPLACE VIEW public.today_schedules_with_flags
+WITH (security_invoker = true) AS
 SELECT
   s.*,
   EXISTS (
