@@ -29,6 +29,7 @@ export const ERR_METODE_TIDAK_VALID = "Metode absensi tidak valid.";
 export const ERR_AUTH = "Tidak memiliki akses. Silakan masuk kembali.";
 export const ERR_DOSEN_SAJA = "Hanya dosen yang dapat membuat sesi absensi.";
 export const ERR_SESI_TIDAK_LENGKAP = "Data sesi tidak lengkap.";
+export const ERR_SESI_DURASI = "Durasi sesi tidak valid (1-120 menit).";
 export const ERR_UMUM = "Terjadi kesalahan. Silakan coba lagi.";
 
 export const STATUS_HADIR = "HADIR";
@@ -405,4 +406,153 @@ export async function ensureSessionQrCore(
     throw new Error("insertQrToken failed");
   }
   return { ok: true, qr_token: token, created: true };
+}
+
+// ------------------------------------------------- set-session-state (fase-1)
+export const DEFAULT_SESSION_DURATION_MINUTES = 10;
+export const MAX_SESSION_DURATION_MINUTES = 120;
+
+export interface SessionScheduleRow {
+  id: number;
+  is_active: boolean;
+  lecturer_id: string | null;
+  session_open: boolean;
+  session_expires_at: string | null;
+}
+
+export interface SetSessionInput {
+  callerId: string;
+  isLecturer: boolean;
+  scheduleId: number;
+  state: string;
+  durationMinutes?: number;
+}
+
+export interface SetSessionDeps {
+  now: () => Date;
+  findSchedule: (id: number) => Promise<SessionScheduleRow | null>;
+  findOpenSession: (
+    scheduleId: number,
+  ) => Promise<{ id: number } | null>;
+  createSession: (scheduleId: number) => Promise<{ id: number }>;
+  closeOpenSessions: (
+    scheduleId: number,
+    closedAt: string,
+  ) => Promise<number>;
+  updateSchedule: (
+    scheduleId: number,
+    patch: { session_open: boolean; session_expires_at: string | null },
+  ) => Promise<void>;
+  setCodesActive: (scheduleId: number, active: boolean) => Promise<void>;
+  ensurePermanentCode: (
+    scheduleId: number,
+    code: string,
+  ) => Promise<string>;
+  refreshQrExpiry: (
+    scheduleId: number,
+    expiresAt: string,
+  ) => Promise<void>;
+}
+
+export type SetSessionErrorCode =
+  | "NOT_LECTURER"
+  | "SCHEDULE_NOT_FOUND"
+  | "NOT_OWNER"
+  | "INVALID_DURATION"
+  | "INVALID_STATE";
+
+export type SetSessionResult =
+  | {
+    ok: true;
+    state: "on" | "off";
+    session_id: number | null;
+    expires_at: string | null;
+  }
+  | { ok: false; code: SetSessionErrorCode; error: string };
+
+function setFail(
+  code: SetSessionErrorCode,
+  error: string,
+): SetSessionResult {
+  return { ok: false, code, error };
+}
+
+/**
+ * ON: buka/perpanjang sesi (satu baris sesi berjalan; ON ganda hanya
+ * memundurkan expiry). OFF: tutup sesi berjalan (no-op bila sudah OFF).
+ * Jam selalu server now(); durasi default 10, range 1-120.
+ */
+export async function setSessionStateCore(
+  deps: SetSessionDeps,
+  input: SetSessionInput,
+): Promise<SetSessionResult> {
+  if (!input.isLecturer) {
+    return setFail("NOT_LECTURER", ERR_DOSEN_SAJA);
+  }
+  if (input.state !== "on" && input.state !== "off") {
+    return setFail("INVALID_STATE", ERR_SESI_TIDAK_LENGKAP);
+  }
+  const schedule = await deps.findSchedule(input.scheduleId);
+  if (!schedule || !schedule.is_active) {
+    return setFail("SCHEDULE_NOT_FOUND", ERR_JADWAL_TIDAK_AKTIF);
+  }
+  if (
+    schedule.lecturer_id != null && schedule.lecturer_id !== input.callerId
+  ) {
+    return setFail("NOT_OWNER", ERR_DOSEN_SAJA);
+  }
+
+  const serverNow = deps.now();
+
+  if (input.state === "off") {
+    if (!schedule.session_open) {
+      return { ok: true, state: "off", session_id: null, expires_at: null };
+    }
+    const open = await deps.findOpenSession(input.scheduleId);
+    await deps.closeOpenSessions(
+      input.scheduleId,
+      serverNow.toISOString(),
+    );
+    await deps.updateSchedule(input.scheduleId, {
+      session_open: false,
+      session_expires_at: null,
+    });
+    await deps.setCodesActive(input.scheduleId, false);
+    return {
+      ok: true,
+      state: "off",
+      session_id: open?.id ?? null,
+      expires_at: null,
+    };
+  }
+
+  const duration = input.durationMinutes ?? DEFAULT_SESSION_DURATION_MINUTES;
+  if (
+    !Number.isInteger(duration) || duration < 1 ||
+    duration > MAX_SESSION_DURATION_MINUTES
+  ) {
+    return setFail("INVALID_DURATION", ERR_SESI_DURASI);
+  }
+  const expiresAt =
+    new Date(serverNow.getTime() + duration * 60_000).toISOString();
+
+  // ON saat ON: perpanjang expiry sesi berjalan, tanpa baris sesi baru.
+  // Bila flag ON tapi baris sesi hilang (inkonsisten), sembuhkan: buat baru.
+  let sessionId: number;
+  const open = schedule.session_open
+    ? await deps.findOpenSession(input.scheduleId)
+    : null;
+  if (open) {
+    sessionId = open.id;
+  } else {
+    sessionId = (await deps.createSession(input.scheduleId)).id;
+  }
+  await deps.updateSchedule(input.scheduleId, {
+    session_open: true,
+    session_expires_at: expiresAt,
+  });
+  await deps.setCodesActive(input.scheduleId, true);
+  await deps.ensurePermanentCode(input.scheduleId, generateAttendanceCode());
+  await deps.refreshQrExpiry(input.scheduleId, expiresAt);
+  return { ok: true, state: "on", session_id: sessionId, expires_at: expiresAt };
 }
