@@ -376,6 +376,20 @@ export function isSchedulableForNewSession(
   return schedule != null && schedule.is_active === true;
 }
 
+/**
+ * Guard pemilik jadwal (fase-1): pool unassigned (lecturer_id NULL) boleh
+ * diakses lecturer mana pun; jadwal bertuan hanya pemiliknya.
+ * Dipakai handler generate-session; diuji di
+ * supabase/functions/tests/generate_session_test.ts.
+ */
+export function isScheduleOwner(
+  schedule: { lecturer_id: string | null } | null,
+  callerId: string,
+): boolean {
+  return schedule != null &&
+    (schedule.lecturer_id == null || schedule.lecturer_id === callerId);
+}
+
 export function buildSessionExpiry(now: Date, durationMinutes: number): Date {
   return new Date(now.getTime() + durationMinutes * 60_000);
 }

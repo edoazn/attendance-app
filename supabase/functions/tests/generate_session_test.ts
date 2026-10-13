@@ -7,7 +7,10 @@
 // Jalankan: deno test supabase/functions/tests/
 
 import { assertEquals } from "jsr:@std/assert@1";
-import { isSchedulableForNewSession } from "../_shared/attendance.ts";
+import {
+  isSchedulableForNewSession,
+  isScheduleOwner,
+} from "../_shared/attendance.ts";
 
 Deno.test("generate-session guard: jadwal hilang (null) tidak schedulable", () => {
   assertEquals(isSchedulableForNewSession(null), false);
@@ -20,4 +23,16 @@ Deno.test("generate-session guard: jadwal arsip (is_active=false) ditolak", () =
 
 Deno.test("generate-session guard: jadwal aktif (is_active=true) lolos", () => {
   assertEquals(isSchedulableForNewSession({ is_active: true }), true);
+});
+
+Deno.test("generate-session guard: pemilik boleh, pool NULL boleh, milik orang lain ditolak", () => {
+  const dosenA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+  const dosenB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+  assertEquals(
+    isScheduleOwner({ lecturer_id: dosenA }, dosenA),
+    true,
+  );
+  assertEquals(isScheduleOwner({ lecturer_id: null }, dosenB), true);
+  assertEquals(isScheduleOwner({ lecturer_id: dosenA }, dosenB), false);
+  assertEquals(isScheduleOwner(null, dosenA), false);
 });

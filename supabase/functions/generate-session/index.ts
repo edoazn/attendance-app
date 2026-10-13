@@ -14,6 +14,7 @@ import {
   ERR_UMUM,
   generateAttendanceCode,
   isSchedulableForNewSession,
+  isScheduleOwner,
 } from "../_shared/attendance.ts";
 
 const corsHeaders = {
@@ -91,23 +92,54 @@ Deno.serve(async (req) => {
     // 3. Jadwal harus ada DAN aktif (jadwal arsip tidak dapat sesi baru).
     const { data: schedule } = await admin
       .from("schedules")
-      .select("id, is_active")
+      .select("id, is_active, lecturer_id")
       .eq("id", scheduleId)
       .maybeSingle();
     if (!isSchedulableForNewSession(schedule)) {
       return json({ error: ERR_JADWAL_TIDAK_AKTIF }, 404);
+    }
+    // Fase-1: hanya pemilik (pool NULL boleh siapa pun).
+    if (
+      !isScheduleOwner(
+        schedule as { lecturer_id: string | null } | null,
+        user.id,
+      )
+    ) {
+      return json({ error: ERR_DOSEN_SAJA }, 403);
     }
 
     // 4. Tulis sesi (server now + durasi).
     const expiresAt = buildSessionExpiry(new Date(), durationMinutes)
       .toISOString();
 
-    const { data: qrRow, error: qrError } = await admin
+    // Fase-1: token QR statis per jadwal — pakai ulang baris yang ada
+    // (UNIQUE(schedule_id) sejak 002); balapan insert baca ulang pemenang.
+    let qrToken: string | null = null;
+    const { data: existingQr } = await admin
       .from("qr_tokens")
-      .insert({ schedule_id: scheduleId, expires_at: expiresAt })
       .select("token")
-      .single();
-    if (qrError || !qrRow) return json({ error: ERR_UMUM }, 500);
+      .eq("schedule_id", scheduleId)
+      .maybeSingle();
+    if (existingQr) {
+      qrToken = (existingQr as { token: string }).token;
+    } else {
+      const { data: qrRow, error: qrError } = await admin
+        .from("qr_tokens")
+        .insert({ schedule_id: scheduleId, expires_at: expiresAt })
+        .select("token")
+        .single();
+      if (!qrError && qrRow) {
+        qrToken = (qrRow as { token: string }).token;
+      } else {
+        const { data: raced } = await admin
+          .from("qr_tokens")
+          .select("token")
+          .eq("schedule_id", scheduleId)
+          .maybeSingle();
+        if (raced) qrToken = (raced as { token: string }).token;
+      }
+    }
+    if (!qrToken) return json({ error: ERR_UMUM }, 500);
 
     // Kode 6 char UPPER; retry bila tabrakan PK (char(6) collision).
     let codeRow: { code: string } | null = null;
@@ -128,7 +160,7 @@ Deno.serve(async (req) => {
     if (!codeRow) return json({ error: ERR_UMUM }, 500);
 
     return json({
-      qr_token: qrRow.token,
+      qr_token: qrToken,
       attendance_code: codeRow.code,
       expires_at: expiresAt,
     }, 200);

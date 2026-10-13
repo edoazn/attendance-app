@@ -380,4 +380,26 @@ DELETE FROM public.profiles WHERE id IN
 DELETE FROM auth.users WHERE id IN
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
 
+-- 13. Jaring pengaman duplikat path non-sesi (temuan review fase-1):
+--     partial unique index (schedule_id, student_id) WHERE session_id IS NULL.
+--     Baris sesi (session_id NOT NULL) dijerat UNIQUE(session_id, student_id);
+--     baris pra-sesi/geo/code (session_id NULL) dijerat index ini karena NULL
+--     tidak konflik di unique biasa.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_index i
+    JOIN pg_class t ON t.oid = i.indrelid
+    JOIN pg_namespace ns ON ns.oid = t.relnamespace
+    WHERE ns.nspname = 'public'
+      AND t.relname = 'attendance_records'
+      AND i.indisunique = true
+      AND pg_get_indexdef(i.indexrelid) ILIKE
+        '%(schedule_id, student_id)%WHERE%session_id IS NULL%'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: partial unique index non-sesi tidak ada';
+  END IF;
+  RAISE NOTICE 'RLS_TEST: partial unique index non-sesi OK';
+END $$;
+
 SELECT 'RLS_TEST_PASS' AS result;
