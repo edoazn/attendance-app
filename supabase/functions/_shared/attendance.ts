@@ -53,6 +53,9 @@ export interface ScheduleRow {
   latitude: number | null;
   longitude: number | null;
   radius_meters: number | null;
+  // Fase-1: sesi ON/OFF manual dosen (migrasi 002).
+  session_open: boolean;
+  session_expires_at: string | null;
 }
 
 export interface QrTokenRow {
@@ -159,6 +162,8 @@ export interface InsertRecordInput {
   method: string;
   status: string;
   distance: number | null;
+  /** Sesi berjalan (cabang QR fase-1); null untuk metode non-sesi. */
+  session_id: number | null;
 }
 
 export interface SubmitDeps {
@@ -168,8 +173,26 @@ export interface SubmitDeps {
     scheduleId: number,
     studentId: string,
   ) => Promise<AttendanceRecordRow | null>;
+  /** Duplikat fase-1: UNIQUE(session_id, student_id) untuk cabang QR. */
+  findExistingSessionRecord: (
+    sessionId: number,
+    studentId: string,
+  ) => Promise<AttendanceRecordRow | null>;
   findQrToken: (token: string) => Promise<QrTokenRow | null>;
   findAttendanceCode: (code: string) => Promise<AttendanceCodeRow | null>;
+  /** Sesi berjalan milik jadwal (dibuka via set-session-state). */
+  findOpenSession: (
+    scheduleId: number,
+  ) => Promise<{ id: number } | null>;
+  /**
+   * Lazy auto-OFF: matikan session_open + tutup sesi berjalan + padamkan
+   * kode saat submit datang setelah expiry. Wiring menjalankannya sebagai
+   * rangkaian call service-role (tanpa transaksi silang-statement).
+   */
+  autoCloseExpiredSession: (
+    scheduleId: number,
+    closedAt: string,
+  ) => Promise<void>;
   insertRecord: (row: InsertRecordInput) => Promise<AttendanceRecordRow>;
 }
 
@@ -221,13 +244,14 @@ export async function submitAttendanceCore(
     return fail("SCHEDULE_INACTIVE", ERR_JADWAL_TIDAK_AKTIF);
   }
 
-  const existing = await deps.findExistingRecord(
-    input.scheduleId,
-    input.studentId,
-  );
-  if (existing) return fail("DUPLICATE", ERR_DUPLIKAT);
+  // Fase-1: semua submit yang diterima berstatus HADIR. Aturan TERLAMBAT
+  // tidak dipakai (absensi hanya mungkin saat sesi ON habis ngajar);
+  // late_threshold_minutes diabaikan, determineStatus dipertahankan untuk
+  // kompatibilitas.
+  const status = STATUS_HADIR;
 
   let distance: number | null = null;
+  let sessionId: number | null = null;
 
   if (input.method === "geolocation") {
     if (
@@ -238,29 +262,64 @@ export async function submitAttendanceCore(
     ) {
       return fail("LOCATION_INCOMPLETE", ERR_LOKASI_TIDAK_LENGKAP);
     }
-    if (schedule.latitude == null || schedule.longitude == null) {
-      return fail("LOCATION_NOT_SET", ERR_LOKASI_BELUM_DIATUR);
+    // Fase-1: geofence hanya bila jadwal punya koordinat (null = mati).
+    if (schedule.latitude != null && schedule.longitude != null) {
+      distance = haversineMeters(
+        schedule.latitude,
+        schedule.longitude,
+        input.latitude,
+        input.longitude,
+      );
+      const radius = schedule.radius_meters ?? DEFAULT_RADIUS_METERS;
+      if (distance > radius) {
+        return fail("OUT_OF_RANGE", ERR_LOKASI_JANGKAUAN);
+      }
     }
-    distance = haversineMeters(
-      schedule.latitude,
-      schedule.longitude,
-      input.latitude,
-      input.longitude,
+    const existing = await deps.findExistingRecord(
+      input.scheduleId,
+      input.studentId,
     );
-    const radius = schedule.radius_meters ?? DEFAULT_RADIUS_METERS;
-    if (distance > radius) {
-      return fail("OUT_OF_RANGE", ERR_LOKASI_JANGKAUAN);
-    }
+    if (existing) return fail("DUPLICATE", ERR_DUPLIKAT);
   } else if (input.method === "qr_code") {
     const token = (input.qrToken ?? "").trim();
     if (!token) return fail("QR_INVALID", ERR_QR_TIDAK_VALID);
     const row = await deps.findQrToken(token);
+    // Token statis milik jadwal lain (mismatch) ditolak generik.
     if (!row || row.schedule_id !== input.scheduleId) {
       return fail("QR_INVALID", ERR_QR_TIDAK_VALID);
     }
-    if (isExpired(row.expires_at, serverNow)) {
+    // Wajib sesi ON dan dalam jendela expiry (sumber tunggal
+    // schedules.session_expires_at; expiry per-baris qr_tokens diabaikan).
+    const expiry = schedule.session_expires_at == null
+      ? null
+      : new Date(schedule.session_expires_at);
+    if (
+      !schedule.session_open || expiry == null ||
+      expiry.getTime() <= serverNow.getTime()
+    ) {
+      if (schedule.session_open) {
+        await deps.autoCloseExpiredSession(
+          input.scheduleId,
+          serverNow.toISOString(),
+        );
+      }
       return fail("QR_EXPIRED", ERR_QR_KEDALUWARSA);
     }
+    const open = await deps.findOpenSession(input.scheduleId);
+    if (!open) {
+      // Flag ON tapi baris sesi hilang: sembuhkan + tolak submit ini.
+      await deps.autoCloseExpiredSession(
+        input.scheduleId,
+        serverNow.toISOString(),
+      );
+      return fail("QR_EXPIRED", ERR_QR_KEDALUWARSA);
+    }
+    const existing = await deps.findExistingSessionRecord(
+      open.id,
+      input.studentId,
+    );
+    if (existing) return fail("DUPLICATE", ERR_DUPLIKAT);
+    sessionId = open.id;
   } else {
     const code = (input.attendanceCode ?? "").trim().toUpperCase();
     if (!code) return fail("CODE_INVALID", ERR_KODE_SALAH);
@@ -271,13 +330,12 @@ export async function submitAttendanceCore(
     if (!row.is_active || isExpired(row.expires_at, serverNow)) {
       return fail("CODE_INVALID", ERR_KODE_SALAH);
     }
+    const existing = await deps.findExistingRecord(
+      input.scheduleId,
+      input.studentId,
+    );
+    if (existing) return fail("DUPLICATE", ERR_DUPLIKAT);
   }
-
-  const status = determineStatus(
-    serverNow,
-    schedule.start_time,
-    schedule.late_threshold_minutes,
-  );
 
   const attendance = await deps.insertRecord({
     schedule_id: input.scheduleId,
@@ -285,6 +343,7 @@ export async function submitAttendanceCore(
     method: input.method,
     status,
     distance,
+    session_id: sessionId,
   });
 
   return { ok: true, status, method: input.method, attendance };

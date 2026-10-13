@@ -4,10 +4,10 @@
 //   auth: student JWT)
 // -> {status, method, attendance: {id, status, method, created_at}} | {error}
 // Inti (submitAttendanceCore di ../_shared/attendance.ts): verify JWT ->
-// student_id -> server now() -> cek is_active -> cek duplicate UNIQUE ->
-// branch method (Haversine vs lat/long kampus + threshold | expiry
-// qr_tokens | UPPER + is_active + expiry) -> HADIR/TERLAMBAT dari
-// now() vs start_time + lateThreshold -> insert -> return.
+// student_id -> server now() -> cek is_active -> cabang method (QR fase-1:
+// token statis + sesi ON + dalam expiry + auto-OFF malas | Haversine hanya
+// bila jadwal punya koordinat | UPPER + is_active + expiry) -> status selalu
+// HADIR -> insert -> return.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
@@ -38,7 +38,7 @@ function json(body: unknown, status: number): Response {
   });
 }
 
-/** Kode Postgres untuk pelanggaran UNIQUE(schedule_id, student_id). */
+/** Kode Postgres untuk pelanggaran UNIQUE(session_id, student_id). */
 const UNIQUE_VIOLATION = "23505";
 
 Deno.serve(async (req) => {
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
         const { data } = await admin
           .from("schedules")
           .select(
-            "id, start_time, is_active, late_threshold_minutes, latitude, longitude, radius_meters",
+            "id, start_time, is_active, late_threshold_minutes, latitude, longitude, radius_meters, session_open, session_expires_at",
           )
           .eq("id", id)
           .maybeSingle();
@@ -108,8 +108,47 @@ Deno.serve(async (req) => {
           .select("id, status, method, created_at")
           .eq("schedule_id", schedId)
           .eq("student_id", studentId)
+          .is("session_id", null)
+          .limit(1)
           .maybeSingle();
         return (data ?? null) as AttendanceRecordRow | null;
+      },
+      findExistingSessionRecord: async (sessionId, studentId) => {
+        const { data } = await admin
+          .from("attendance_records")
+          .select("id, status, method, created_at")
+          .eq("session_id", sessionId)
+          .eq("student_id", studentId)
+          .maybeSingle();
+        return (data ?? null) as AttendanceRecordRow | null;
+      },
+      findOpenSession: async (schedId) => {
+        const { data } = await admin
+          .from("attendance_sessions")
+          .select("id")
+          .eq("schedule_id", schedId)
+          .is("closed_at", null)
+          .order("opened_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return (data ?? null) as { id: number } | null;
+      },
+      autoCloseExpiredSession: async (schedId, closedAt) => {
+        // Lazy auto-OFF: rangkaian call service-role (tanpa transaksi
+        // silang-statement); idempoten bila sesi sudah OFF.
+        await admin
+          .from("schedules")
+          .update({ session_open: false, session_expires_at: null })
+          .eq("id", schedId);
+        await admin
+          .from("attendance_sessions")
+          .update({ closed_at: closedAt })
+          .eq("schedule_id", schedId)
+          .is("closed_at", null);
+        await admin
+          .from("attendance_codes")
+          .update({ is_active: false })
+          .eq("schedule_id", schedId);
       },
       findQrToken: async (token) => {
         const { data } = await admin
@@ -136,6 +175,7 @@ Deno.serve(async (req) => {
             method: row.method,
             status: row.status,
             distance: row.distance,
+            session_id: row.session_id,
           })
           .select("id, status, method, created_at")
           .single();
