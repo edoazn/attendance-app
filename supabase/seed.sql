@@ -11,15 +11,35 @@
 -- profiles akan gagal FK — buat dulu user-nya, lalu ulangi file ini.
 
 -- ------------------------------------------------------- profiles (butuh auth.users)
-INSERT INTO public.profiles (id, identity_number, name, email, role) VALUES
-  ('feaef403-a3ae-4c7f-88db-30c5cbcc9b2f', '20240001', 'Mahasiswa A', 'mhs.a@kampus.ac.id', 'STUDENT'),
-  ('9940ab8d-1e2b-4bd4-b921-a40d8b85f971', '20240002', 'Mahasiswa B', 'mhs.b@kampus.ac.id', 'STUDENT'),
-  ('1d389c57-e170-4c39-a06c-f5ba11ee2239', '19800001', 'Dr. Dosen', 'dosen@kampus.ac.id', 'LECTURER')
+INSERT INTO public.profiles (id, identity_number, name, email, role, rombel) VALUES
+  ('feaef403-a3ae-4c7f-88db-30c5cbcc9b2f', '20240001', 'Mahasiswa A', 'mhs.a@kampus.ac.id', 'STUDENT', 'TI-2A'),
+  ('9940ab8d-1e2b-4bd4-b921-a40d8b85f971', '20240002', 'Mahasiswa B', 'mhs.b@kampus.ac.id', 'STUDENT', 'TI-2A'),
+  ('1d389c57-e170-4c39-a06c-f5ba11ee2239', '19800001', 'Dr. Dosen', 'dosen@kampus.ac.id', 'LECTURER', NULL)
 ON CONFLICT (id) DO UPDATE SET
   identity_number = EXCLUDED.identity_number,
   name = EXCLUDED.name,
   email = EXCLUDED.email,
-  role = EXCLUDED.role;
+  role = EXCLUDED.role,
+  rombel = EXCLUDED.rombel;
+
+-- Admin TU: auth.users-nya dibuat via Dashboard/Auth API (atau script
+-- setup-admin Task 4); guard FK agar seed tetap jalan tanpanya.
+DO $$
+BEGIN
+  INSERT INTO public.profiles
+    (id, identity_number, name, email, role, rombel)
+  VALUES
+    ('9e9e9e9e-9e9e-9e9e-9e9e-9e9e9e9e9e9e', '19900001', 'Admin TU',
+     'tu@kampus.ac.id', 'ADMIN', NULL)
+  ON CONFLICT (id) DO UPDATE SET
+    identity_number = EXCLUDED.identity_number,
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    role = EXCLUDED.role,
+    rombel = EXCLUDED.rombel;
+EXCEPTION WHEN foreign_key_violation THEN
+  RAISE NOTICE 'SEED: skip profil Admin TU (auth.users prasyarat belum ada — buat via Dashboard atau setup-admin Task 4)';
+END $$;
 
 -- ------------------------------------------------------- schedules
 -- Baris pertama memakai hari BERJALAN (dinamis) supaya view

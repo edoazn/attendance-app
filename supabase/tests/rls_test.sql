@@ -402,4 +402,109 @@ BEGIN
   RAISE NOTICE 'RLS_TEST: partial unique index non-sesi OK';
 END $$;
 
+-- ================================================================ FASE 2
+-- Plan dashboard-fase2-backend Task 1: peran ADMIN + rombel + view rekap.
+-- Pra-migrasi 004: GAGAL di check 14 (CHECK menolak ADMIN).
+
+-- 14. profiles.role menerima ADMIN + helper is_admin() ada.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.profiles'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) ILIKE '%ADMIN%'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: CHECK role belum mengenal ADMIN';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace ns ON ns.oid = p.pronamespace
+    WHERE ns.nspname = 'public' AND p.proname = 'is_admin'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: helper public.is_admin() belum ada';
+  END IF;
+  RAISE NOTICE 'RLS_TEST: CHECK ADMIN + is_admin OK';
+END $$;
+
+-- 14b. Behavior: INSERT profil ADMIN lolos CHECK (skip bila auth.users
+--     tak bisa dibuat, pola check 7/12).
+DO $$
+BEGIN
+  BEGIN
+    INSERT INTO auth.users (id) VALUES
+      ('cccccccc-cccc-cccc-cccc-cccccccccccc')
+    ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN not_null_violation THEN
+    RAISE NOTICE 'RLS_TEST: skip insert ADMIN uji (auth.users butuh Dashboard/Auth API)';
+    RETURN;
+  END;
+  INSERT INTO public.profiles (id, identity_number, name, role) VALUES
+    ('cccccccc-cccc-cccc-cccc-cccccccccccc', '19900001', 'Admin Uji', 'ADMIN')
+  ON CONFLICT (id) DO UPDATE SET role = 'ADMIN';
+  RAISE NOTICE 'RLS_TEST: INSERT profil ADMIN lolos CHECK OK';
+END $$;
+DELETE FROM public.profiles WHERE id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+DELETE FROM auth.users WHERE id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+
+-- 15. Kolom profiles.rombel + view attendance_summary (+ invoker + kolom).
+DO $$
+DECLARE col text;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'profiles'
+      AND column_name = 'rombel'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: kolom profiles.rombel belum ada';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.views
+    WHERE table_schema = 'public' AND table_name = 'attendance_summary'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: view attendance_summary belum ada';
+  END IF;
+  FOREACH col IN ARRAY ARRAY[
+    'schedule_id', 'student_id', 'total_sesi', 'hadir', 'izin', 'persen'
+  ] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'attendance_summary'
+        AND column_name = col
+    ) THEN
+      RAISE EXCEPTION 'RLS_TEST_FAIL: kolom % view rekap hilang', col;
+    END IF;
+  END LOOP;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class
+    WHERE relnamespace = 'public'::regnamespace
+      AND relname = 'attendance_summary'
+      AND 'security_invoker=true' = ANY (reloptions)
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: view rekap tanpa security_invoker=true';
+  END IF;
+  RAISE NOTICE 'RLS_TEST: rombel + view rekap OK';
+END $$;
+
+-- 16. Policy fase-2 ada di katalog.
+DO $$
+DECLARE p text;
+BEGIN
+  FOREACH p IN ARRAY ARRAY[
+    'schedules_admin_all',
+    'enrollments_admin_all',
+    'profiles_admin_select',
+    'profiles_admin_update',
+    'permit_requests_admin_lecturer_select'
+  ] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'public' AND policyname = p
+    ) THEN
+      RAISE EXCEPTION 'RLS_TEST_FAIL: policy % hilang', p;
+    END IF;
+  END LOOP;
+  RAISE NOTICE 'RLS_TEST: 5 policy fase-2 ada';
+END $$;
+
 SELECT 'RLS_TEST_PASS' AS result;
