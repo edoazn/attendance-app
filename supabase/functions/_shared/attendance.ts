@@ -31,6 +31,7 @@ export const ERR_DOSEN_SAJA = "Hanya dosen yang dapat membuat sesi absensi.";
 export const ERR_SESI_TIDAK_LENGKAP = "Data sesi tidak lengkap.";
 export const ERR_SESI_DURASI = "Durasi sesi tidak valid (1-120 menit).";
 export const ERR_IZIN_SUDAH_DIPROSES = "Pengajuan sudah diproses.";
+export const ERR_USER_CREATE = "Data pengguna tidak dapat dibuat.";
 export const ERR_UMUM = "Terjadi kesalahan. Silakan coba lagi.";
 
 export const STATUS_HADIR = "HADIR";
@@ -727,4 +728,89 @@ export async function approvePermitCore(
   }
   await deps.updateRequestStatus(request.id, input.decision);
   return { ok: true, status: input.decision, attendance_id: attendanceId };
+}
+
+// ------------------------------------------------- create-user (fase-2)
+export const DEFAULT_USER_EMAIL_DOMAIN = "kampus.ac.id";
+export const MIN_USER_PASSWORD_LENGTH = 6;
+
+export interface CreateUserInput {
+  nim: unknown;
+  name: unknown;
+  password: unknown;
+  role: unknown;
+  email?: unknown;
+  rombel?: unknown;
+}
+
+export type CreateUserErrorCode =
+  | "INVALID_NIM"
+  | "INVALID_NAME"
+  | "INVALID_PASSWORD"
+  | "INVALID_ROLE"
+  | "INVALID_EMAIL";
+
+export type ValidatedCreateUser =
+  | {
+    ok: true;
+    nim: string;
+    name: string;
+    email: string;
+    role: "STUDENT" | "LECTURER" | "ADMIN";
+    rombel: string | null;
+  }
+  | { ok: false; code: CreateUserErrorCode; error: string };
+
+function invalidUser(
+  code: CreateUserErrorCode,
+  error: string,
+): ValidatedCreateUser {
+  return { ok: false, code, error };
+}
+
+/** Sengaja generik untuk semua sebab gagal tulis (anti enumerasi NIM). */
+export function duplicateUserErrorMessage(): string {
+  return ERR_USER_CREATE;
+}
+
+/**
+ * Validasi murni input create-user. Email kosong → default
+ * `{nim}@kampus.ac.id` (kebutuhan login-with-nim).
+ */
+export function validateCreateUserInput(
+  input: CreateUserInput,
+): ValidatedCreateUser {
+  const nim = typeof input.nim === "string" ? input.nim.trim() : "";
+  if (!nim) return invalidUser("INVALID_NIM", "Nomor identitas tidak valid.");
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  if (!name) return invalidUser("INVALID_NAME", "Nama tidak valid.");
+  const password = typeof input.password === "string" ? input.password : "";
+  if (password.length < MIN_USER_PASSWORD_LENGTH) {
+    return invalidUser(
+      "INVALID_PASSWORD",
+      `Kata sandi minimal ${MIN_USER_PASSWORD_LENGTH} karakter.`,
+    );
+  }
+  const role = typeof input.role === "string"
+    ? input.role.trim().toUpperCase()
+    : "";
+  if (role !== "STUDENT" && role !== "LECTURER" && role !== "ADMIN") {
+    return invalidUser("INVALID_ROLE", "Peran tidak valid.");
+  }
+  const emailRaw = typeof input.email === "string" ? input.email.trim() : "";
+  const email = emailRaw || `${nim}@${DEFAULT_USER_EMAIL_DOMAIN}`;
+  if (!email.includes("@")) {
+    return invalidUser("INVALID_EMAIL", "Surel tidak valid.");
+  }
+  const rombelRaw = typeof input.rombel === "string"
+    ? input.rombel.trim()
+    : "";
+  return {
+    ok: true,
+    nim,
+    name,
+    email,
+    role,
+    rombel: rombelRaw || null,
+  };
 }
