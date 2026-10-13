@@ -1,8 +1,10 @@
 -- Seed dev untuk Task 1 migrasi Supabase.
 -- Prasyarat: 3 auth.users di bawah HARUS sudah ada (buat via Dashboard
 -- Authentication atau supabase auth admin API), karena profiles.id FK ke
--- auth.users(id). UUID deterministik agar seed idempoten.
--- Jalankan: supabase db execute -f supabase/seed.sql (project dev SAJA).
+-- auth.users(id). UUID di bawah adalah ID ASLI dari project dev
+-- takntldmevqfasenqdiq (diambil 2026-10-13); JANGAN jalankan file ini ke
+-- project lain tanpa mengganti UUID-nya.
+-- Jalankan: supabase db query --linked -f supabase/seed.sql (project dev SAJA).
 
 -- Catatan: insert auth.users tidak dilakukan di sini (password hashing +
 -- konfirmasi email harus lewat Auth API). Jika user auth belum ada, blok
@@ -10,9 +12,9 @@
 
 -- ------------------------------------------------------- profiles (butuh auth.users)
 INSERT INTO public.profiles (id, identity_number, name, email, role) VALUES
-  ('11111111-1111-1111-1111-111111111111', '20240001', 'Mahasiswa A', 'mhs.a@kampus.ac.id', 'STUDENT'),
-  ('22222222-2222-2222-2222-222222222222', '20240002', 'Mahasiswa B', 'mhs.b@kampus.ac.id', 'STUDENT'),
-  ('33333333-3333-3333-3333-333333333333', '19800001', 'Dr. Dosen', 'dosen@kampus.ac.id', 'LECTURER')
+  ('feaef403-a3ae-4c7f-88db-30c5cbcc9b2f', '20240001', 'Mahasiswa A', 'mhs.a@kampus.ac.id', 'STUDENT'),
+  ('9940ab8d-1e2b-4bd4-b921-a40d8b85f971', '20240002', 'Mahasiswa B', 'mhs.b@kampus.ac.id', 'STUDENT'),
+  ('1d389c57-e170-4c39-a06c-f5ba11ee2239', '19800001', 'Dr. Dosen', 'dosen@kampus.ac.id', 'LECTURER')
 ON CONFLICT (id) DO UPDATE SET
   identity_number = EXCLUDED.identity_number,
   name = EXCLUDED.name,
@@ -48,9 +50,9 @@ SELECT setval(pg_get_serial_sequence('public.schedules', 'id'), 100);
 
 -- ------------------------------------------------------- enrollments
 INSERT INTO public.enrollments (schedule_id, student_id) VALUES
-  (1, '11111111-1111-1111-1111-111111111111'),
-  (1, '22222222-2222-2222-2222-222222222222'),
-  (2, '11111111-1111-1111-1111-111111111111')
+  (1, 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f'),
+  (1, '9940ab8d-1e2b-4bd4-b921-a40d8b85f971'),
+  (2, 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f')
 ON CONFLICT DO NOTHING;
 
 -- ------------------------------------------------------- qr_tokens (1 valid stabil untuk jadwal 1)
@@ -72,14 +74,14 @@ ON CONFLICT (code) DO UPDATE SET
 
 -- ------------------------------------------------------- attendance_records (milik B di jadwal 1)
 INSERT INTO public.attendance_records (schedule_id, student_id, method, status, distance) VALUES
-  (1, '22222222-2222-2222-2222-222222222222', 'qr_code', 'HADIR', 25.5)
+  (1, '9940ab8d-1e2b-4bd4-b921-a40d8b85f971', 'qr_code', 'HADIR', 25.5)
 ON CONFLICT (schedule_id, student_id) DO NOTHING;
 
 -- ------------------------------------------------------- permit_requests (milik A di jadwal 2)
 -- Id eksplisit + ON CONFLICT (id): idempoten nyata. (ON CONFLICT DO NOTHING
 -- tanpa arbiter tidak pernah trigger di tabel ini karena PK id selalu baru.)
 INSERT INTO public.permit_requests (id, schedule_id, student_id, alasan) VALUES
-  (1, 2, '11111111-1111-1111-1111-111111111111', 'Sakit — surat dokter terlampir')
+  (1, 2, 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f', 'Sakit — surat dokter terlampir')
 ON CONFLICT (id) DO UPDATE SET
   schedule_id = EXCLUDED.schedule_id,
   student_id = EXCLUDED.student_id,
