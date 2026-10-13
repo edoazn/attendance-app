@@ -114,6 +114,39 @@ data class ScheduleDto(
     fun endTimeShort(): String   = endTime?.take(5) ?: "—"
 }
 
+// ─── History Response (Task 4: attendance_records + join schedules) ──────────
+
+/**
+ * Satu baris riwayat kehadiran dari PostgREST:
+ * `GET /attendance_records?select=*,schedules(*)&order=created_at.desc`.
+ *
+ * RLS `attendance_records_select_own` memastikan hanya milik sendiri yang
+ * kembali; `status` uppercase `HADIR`/`TERLAMBAT`, `created_at` ISO-8601
+ * dipakai verbatim (bukan epoch).
+ */
+data class AttendanceHistoryDto(
+    @field:SerializedName("id")
+    val id: Long? = null,
+
+    @field:SerializedName("schedule_id")
+    val scheduleId: Long? = null,
+
+    @field:SerializedName("method")
+    val method: String? = null,
+
+    @field:SerializedName("status")
+    val status: String? = null,
+
+    @field:SerializedName("distance")
+    val distance: Double? = null,
+
+    @field:SerializedName("created_at")
+    val createdAt: String? = null,
+
+    @field:SerializedName("schedules")
+    val schedule: ScheduleDto? = null
+)
+
 // Backward-compat alias — dipertahankan agar tidak breaking import lama
 @Deprecated("Gunakan AttendanceData", replaceWith = ReplaceWith("AttendanceData"))
 typealias AttendanceResponse = AttendanceData

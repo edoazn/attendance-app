@@ -8,6 +8,7 @@ import com.example.attendaceapp.data.remote.api.SupabaseConfig
 import com.example.attendaceapp.data.remote.request.AttendanceRequest
 import com.example.attendaceapp.data.remote.response.AttendanceData
 import com.example.attendaceapp.data.remote.response.AttendanceDetail
+import com.example.attendaceapp.data.remote.response.AttendanceHistoryDto
 import com.example.attendaceapp.data.remote.response.ScheduleDto
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -32,6 +33,8 @@ import kotlinx.coroutines.withContext
  *   qr_token?, attendance_code?}`.
  * - Daftar jadwal → PostgREST ke view/tabel Task 1
  *   (`today_schedules_with_flags`, `schedules`).
+ * - Riwayat kehadiran → PostgREST Task 4
+ *   (`attendance_records` + join `schedules`, terbaru dulu).
  * - `expires_at`/`created_at` format ISO-8601 string dipakai verbatim
  *   (tidak pernah dikonversi dari/ke epoch).
  * - `status` uppercase `HADIR`/`TERLAMBAT`; `method` verbatim
@@ -162,6 +165,41 @@ class SupabaseRepository(
     }
 
     // ─── Absensi ─────────────────────────────────────────────────────────────
+
+    /**
+     * Ambil riwayat kehadiran mahasiswa dari PostgREST
+     * (`attendance_records` + join `schedules`, terbaru dulu).
+     * RLS mengembalikan hanya milik sendiri; list kosong berarti belum
+     * pernah absen (bukan error) → UI tampilkan empty state.
+     */
+    suspend fun getHistory(): Result<List<AttendanceHistoryDto>> {
+        val token = currentToken() ?: return Result.failure(
+            Exception("Sesi login tidak ditemukan. Silakan login ulang.")
+        )
+        return try {
+            val request = restRequest(
+                url = "$restBaseUrl/attendance_records?select=*,schedules(*)&order=created_at.desc",
+                token = token
+            )
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val rawBody = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        val type = object : TypeToken<List<AttendanceHistoryDto>>() {}.type
+                        val list: List<AttendanceHistoryDto> =
+                            gson.fromJson(rawBody.ifBlank { "[]" }, type) ?: emptyList()
+                        Result.success(list)
+                    } else {
+                        Result.failure<List<AttendanceHistoryDto>>(
+                            Exception(errorMessageOf(rawBody, "Gagal memuat riwayat"))
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Tidak dapat terhubung ke server. Periksa koneksi internet."))
+        }
+    }
 
     /** Submit absensi via geolocation. */
     suspend fun submitAttendanceGeolocation(

@@ -21,6 +21,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,15 +45,18 @@ import com.example.attendaceapp.ui.screens.auth.AuthViewModel
 @Composable
 fun ProfilePage(
     modifier: Modifier = Modifier,
-    viewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel()
 ) {
+    // Nama + NIM asli dari sesi login (bukan hardcode).
+    val currentUser by authViewModel.currentUser.collectAsState()
+
     Scaffold(
         containerColor = Color.White,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        "Profile", fontWeight = FontWeight.Bold
+                        "Profil", fontWeight = FontWeight.Bold
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -72,7 +77,7 @@ fun ProfilePage(
             // Image profile
             Image(
                 painter = painterResource(id = R.drawable.avatar),
-                contentDescription = "Profile Picture",
+                contentDescription = "Foto profil",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(129.dp)
@@ -80,14 +85,14 @@ fun ProfilePage(
             )
             // full name
             Text(
-                text = "Muhammad Edo Azani",
+                text = currentUser?.name?.takeIf { it.isNotBlank() } ?: "Belum login",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(top = 16.dp)
             )
             // NIM
             Text(
-                text = "211420108",
+                text = currentUser?.nim?.takeIf { it.isNotBlank() } ?: "—",
                 fontWeight = FontWeight.Normal,
                 color = colorResource(R.color.gray),
                 modifier = Modifier.padding(top = 4.dp)
@@ -112,13 +117,13 @@ fun ProfilePage(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {
-                            viewModel.logout()
+                            authViewModel.logout()
                         }
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Logout",
+                    text = "Keluar",
                     fontSize = 18.sp,
                     color = colorResource(id = R.color.primary_color),
                 )

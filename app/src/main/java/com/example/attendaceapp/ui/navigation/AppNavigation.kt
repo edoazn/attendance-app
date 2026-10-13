@@ -169,7 +169,7 @@ fun AppNavigation(
                 HistoryPage()
             }
             composable(Screen.Profile.route) {
-                ProfilePage(viewModel = authViewModel)
+                ProfilePage(authViewModel = authViewModel)
             }
         }
     }
