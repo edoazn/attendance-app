@@ -191,4 +191,193 @@ RESET "request.jwt.claims";
 DELETE FROM public.profiles WHERE id = '44444444-4444-4444-4444-444444444444';
 DELETE FROM auth.users WHERE id = '44444444-4444-4444-4444-444444444444';
 
+-- ================================================================ FASE 1
+-- Task 1 plan lecturer-backend-fase1: QR statis + sesi instans + scoping
+-- lecturer. Pra-migrasi 002: GAGAL di check 8 (kolom/tabel belum ada).
+-- Pasca migrasi+seed: semua check 8-12 PASS.
+
+-- 8. Kolom sesi lecturer di schedules.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'schedules'
+      AND column_name IN ('lecturer_id', 'session_open', 'session_expires_at')
+    HAVING COUNT(*) = 3
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: kolom fase-1 schedules (lecturer_id/session_open/session_expires_at) tidak lengkap';
+  END IF;
+  RAISE NOTICE 'RLS_TEST: kolom fase-1 schedules lengkap';
+END $$;
+
+-- 9. Tabel attendance_sessions + session_id + unique baru + qr statis unik
+--    + permit_requests.status.
+DO $$
+DECLARE n int;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'attendance_sessions'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: tabel public.attendance_sessions belum ada';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'attendance_records'
+      AND column_name = 'session_id'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: kolom attendance_records.session_id belum ada';
+  END IF;
+  -- UNIQUE(session_id, student_id) harus ada; UNIQUE lama
+  -- (schedule_id, student_id) harus sudah dibuang.
+  SELECT COUNT(*) INTO n FROM pg_constraint c
+  JOIN pg_class t ON t.oid = c.conrelid
+  JOIN pg_namespace ns ON ns.oid = t.relnamespace
+  WHERE ns.nspname = 'public' AND t.relname = 'attendance_records'
+    AND c.contype = 'u'
+    AND (SELECT array_agg(a.attname::text ORDER BY k.ord)
+         FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum)
+        = ARRAY['session_id', 'student_id'];
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: UNIQUE(session_id, student_id) tidak ada';
+  END IF;
+  SELECT COUNT(*) INTO n FROM pg_constraint c
+  JOIN pg_class t ON t.oid = c.conrelid
+  JOIN pg_namespace ns ON ns.oid = t.relnamespace
+  WHERE ns.nspname = 'public' AND t.relname = 'attendance_records'
+    AND c.contype = 'u'
+    AND (SELECT array_agg(a.attname::text ORDER BY k.ord)
+         FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum)
+        = ARRAY['schedule_id', 'student_id'];
+  IF n <> 0 THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: UNIQUE lama (schedule_id, student_id) masih ada';
+  END IF;
+  -- qr_tokens: satu baris per jadwal.
+  SELECT COUNT(*) INTO n FROM pg_constraint c
+  JOIN pg_class t ON t.oid = c.conrelid
+  JOIN pg_namespace ns ON ns.oid = t.relnamespace
+  WHERE ns.nspname = 'public' AND t.relname = 'qr_tokens'
+    AND c.contype = 'u'
+    AND (SELECT array_agg(a.attname::text ORDER BY k.ord)
+         FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum)
+        = ARRAY['schedule_id'];
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: UNIQUE(qr_tokens.schedule_id) tidak ada';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'permit_requests'
+      AND column_name = 'status'
+  ) THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: kolom permit_requests.status belum ada';
+  END IF;
+  RAISE NOTICE 'RLS_TEST: sesi instans + unique baru + status izin OK';
+END $$;
+
+-- 10. Policy fase-1 ada (schedules_select_enrolled_or_lecturer dipertahankan
+--     namanya tapi dipersempit; sessions select via induk + deny tulis).
+DO $$
+DECLARE p text;
+BEGIN
+  FOREACH p IN ARRAY ARRAY[
+    'schedules_select_enrolled_or_lecturer',
+    'attendance_sessions_select_via_schedule',
+    'attendance_sessions_no_direct_insert',
+    'attendance_sessions_no_direct_update',
+    'attendance_sessions_no_direct_delete'
+  ] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'public' AND policyname = p
+    ) THEN
+      RAISE EXCEPTION 'RLS_TEST_FAIL: policy % hilang', p;
+    END IF;
+  END LOOP;
+  RAISE NOTICE 'RLS_TEST: 5 policy fase-1 ada';
+END $$;
+
+-- 11. Behavior Step 1 brief: 2 sesi berbeda, student sama -> sukses keduanya
+--     (bukan 409). Jalan sebagai postgres (uji constraint, bukan RLS).
+DO $$
+BEGIN
+  INSERT INTO public.attendance_sessions (schedule_id)
+  VALUES (1), (1);
+  INSERT INTO public.attendance_records
+    (schedule_id, student_id, session_id, method, status)
+  VALUES
+    (1, 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f',
+     (SELECT min(id) FROM public.attendance_sessions WHERE schedule_id = 1 AND closed_at IS NULL),
+     'qr_code', 'HADIR'),
+    (1, 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f',
+     (SELECT max(id) FROM public.attendance_sessions WHERE schedule_id = 1 AND closed_at IS NULL),
+     'qr_code', 'HADIR');
+  RAISE NOTICE 'RLS_TEST: sesi minggu-2 lolos unique OK';
+EXCEPTION WHEN OTHERS THEN
+  RAISE EXCEPTION 'RLS_TEST_FAIL: sesi minggu-2 gagal: %', SQLERRM;
+END $$;
+-- Bersihkan data uji check 11 (record dulu karena FK).
+DO $$
+BEGIN
+  DELETE FROM public.attendance_records
+  WHERE student_id = 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f' AND session_id IS NOT NULL;
+  DELETE FROM public.attendance_sessions WHERE schedule_id = 1;
+END $$;
+
+-- 12. Behavior Step 1 brief: lecturer B tidak melihat jadwal milik A.
+--     Memakai jadwal uji milik A (bukan seed) agar seed tak termutasi.
+DO $$
+DECLARE scoped_id bigint; c int;
+BEGIN
+  BEGIN
+    INSERT INTO auth.users (id) VALUES
+      ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
+      ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')
+    ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN not_null_violation THEN
+    RAISE NOTICE 'RLS_TEST: skip scope lecturer (auth.users butuh Dashboard/Auth API)';
+    RETURN;
+  END;
+  INSERT INTO public.profiles (id, identity_number, name, role) VALUES
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '19800011', 'Dosen A', 'LECTURER'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '19800022', 'Dosen B', 'LECTURER')
+  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.schedules
+    (course_name, lecturer_name, lecturer_id, room, day, start_time, end_time, is_active)
+  VALUES
+    ('Uji Scope', 'Dosen A', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+     'Ruang U', 'Monday', '10:00', '12:00', true)
+  RETURNING id INTO scoped_id;
+
+  SET ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    '{"sub": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"}', false);
+  SELECT COUNT(*) INTO c FROM public.schedules WHERE id = scoped_id;
+  IF c <> 0 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'RLS_TEST_FAIL: lecturer B melihat % baris jadwal milik A', c;
+  END IF;
+  PERFORM set_config('request.jwt.claims',
+    '{"sub": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}', false);
+  SELECT COUNT(*) INTO c FROM public.schedules WHERE id = scoped_id;
+  IF c <> 1 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'RLS_TEST_FAIL: lecturer A tidak melihat jadwalnya sendiri';
+  END IF;
+  RESET ROLE;
+  RESET "request.jwt.claims";
+  RAISE NOTICE 'RLS_TEST: scope lecturer (B=0, A=1) OK';
+EXCEPTION WHEN OTHERS THEN
+  BEGIN RESET ROLE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  RAISE;
+END $$;
+-- Bersihkan data uji check 12.
+DELETE FROM public.schedules WHERE course_name = 'Uji Scope';
+DELETE FROM public.profiles WHERE id IN
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+DELETE FROM auth.users WHERE id IN
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+
 SELECT 'RLS_TEST_PASS' AS result;

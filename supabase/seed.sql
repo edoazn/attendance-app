@@ -24,19 +24,22 @@ ON CONFLICT (id) DO UPDATE SET
 -- ------------------------------------------------------- schedules
 -- Baris pertama memakai hari BERJALAN (dinamis) supaya view
 -- today_schedules_with_flags selalu mengembalikan >= 1 baris saat test.
+-- lecturer_id eksplisit ke Dr. Dosen (UUID dev di atas); fase-1: dosen
+-- hanya melihat jadwal miliknya + pool NULL.
 INSERT INTO public.schedules
-  (id, course_name, lecturer_name, room, day, start_time, end_time, is_active,
+  (id, course_name, lecturer_name, lecturer_id, room, day, start_time, end_time, is_active,
    late_threshold_minutes, latitude, longitude, radius_meters)
 VALUES
-  (1, 'Pemrograman Mobile', 'Dr. Dosen', 'Ruang 101', TRIM(TO_CHAR(now(), 'Day')),
+  (1, 'Pemrograman Mobile', 'Dr. Dosen', '1d389c57-e170-4c39-a06c-f5ba11ee2239', 'Ruang 101', TRIM(TO_CHAR(now(), 'Day')),
    '08:00', '10:00', true, 15, -6.200000, 106.816666, 100),
-  (2, 'Basis Data', 'Dr. Dosen', 'Ruang 202', 'Monday',
+  (2, 'Basis Data', 'Dr. Dosen', '1d389c57-e170-4c39-a06c-f5ba11ee2239', 'Ruang 202', 'Monday',
    '10:00', '12:00', true, 15, -6.200000, 106.816666, 100),
-  (3, 'Jaringan Komputer (arsip)', 'Dr. Dosen', 'Ruang 303', 'Friday',
+  (3, 'Jaringan Komputer (arsip)', 'Dr. Dosen', '1d389c57-e170-4c39-a06c-f5ba11ee2239', 'Ruang 303', 'Friday',
    '13:00', '15:00', false, 10, NULL, NULL, 50)
 ON CONFLICT (id) DO UPDATE SET
   course_name = EXCLUDED.course_name,
   lecturer_name = EXCLUDED.lecturer_name,
+  lecturer_id = EXCLUDED.lecturer_id,
   room = EXCLUDED.room,
   day = EXCLUDED.day,
   start_time = EXCLUDED.start_time,
@@ -73,9 +76,17 @@ ON CONFLICT (code) DO UPDATE SET
   is_active = EXCLUDED.is_active;
 
 -- ------------------------------------------------------- attendance_records (milik B di jadwal 1)
-INSERT INTO public.attendance_records (schedule_id, student_id, method, status, distance) VALUES
-  (1, '9940ab8d-1e2b-4bd4-b921-a40d8b85f971', 'qr_code', 'HADIR', 25.5)
-ON CONFLICT (schedule_id, student_id) DO NOTHING;
+-- Fase-1: session_id NULL (baris pra-sesi, tetap valid karena NULL tidak
+-- konflik di UNIQUE baru). Idempoten via WHERE NOT EXISTS (ON CONFLICT
+-- arbiter kolom lama sudah tidak ada).
+INSERT INTO public.attendance_records (schedule_id, student_id, method, status, distance)
+SELECT 1, '9940ab8d-1e2b-4bd4-b921-a40d8b85f971', 'qr_code', 'HADIR', 25.5
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.attendance_records
+  WHERE schedule_id = 1
+    AND student_id = '9940ab8d-1e2b-4bd4-b921-a40d8b85f971'
+    AND session_id IS NULL
+);
 
 -- ------------------------------------------------------- permit_requests (milik A di jadwal 2)
 -- Id eksplisit + ON CONFLICT (id): idempoten nyata. (ON CONFLICT DO NOTHING
