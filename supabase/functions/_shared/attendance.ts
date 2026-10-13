@@ -30,6 +30,7 @@ export const ERR_AUTH = "Tidak memiliki akses. Silakan masuk kembali.";
 export const ERR_DOSEN_SAJA = "Hanya dosen yang dapat membuat sesi absensi.";
 export const ERR_SESI_TIDAK_LENGKAP = "Data sesi tidak lengkap.";
 export const ERR_SESI_DURASI = "Durasi sesi tidak valid (1-120 menit).";
+export const ERR_IZIN_SUDAH_DIPROSES = "Pengajuan sudah diproses.";
 export const ERR_UMUM = "Terjadi kesalahan. Silakan coba lagi.";
 
 export const STATUS_HADIR = "HADIR";
@@ -628,4 +629,102 @@ export async function setSessionStateCore(
   await deps.ensurePermanentCode(input.scheduleId, generateAttendanceCode());
   await deps.refreshQrExpiry(input.scheduleId, expiresAt);
   return { ok: true, state: "on", session_id: sessionId, expires_at: expiresAt };
+}
+
+// ------------------------------------------------- approve-permit (fase-2)
+export interface PermitRequestRow {
+  id: number;
+  schedule_id: number;
+  student_id: string;
+  status: string;
+  alasan: string | null;
+}
+
+export interface ApprovePermitInput {
+  callerId: string;
+  isAdmin: boolean;
+  isLecturer: boolean;
+  permitId: number;
+  decision: string;
+}
+
+export interface ApprovePermitDeps {
+  findRequest: (id: number) => Promise<PermitRequestRow | null>;
+  findScheduleOwner: (
+    scheduleId: number,
+  ) => Promise<{ lecturer_id: string | null } | null>;
+  insertIzinRecord: (
+    scheduleId: number,
+    studentId: string,
+  ) => Promise<{ id: number }>;
+  updateRequestStatus: (
+    permitId: number,
+    status: "approved" | "rejected",
+  ) => Promise<void>;
+}
+
+export type ApprovePermitErrorCode =
+  | "NOT_AUTHORIZED"
+  | "SCHEDULE_NOT_FOUND"
+  | "NOT_OWNER"
+  | "NOT_FOUND"
+  | "ALREADY_DECIDED"
+  | "INVALID_DECISION";
+
+export type ApprovePermitResult =
+  | {
+    ok: true;
+    status: "approved" | "rejected";
+    attendance_id: number | null;
+  }
+  | { ok: false; code: ApprovePermitErrorCode; error: string };
+
+function permitFail(
+  code: ApprovePermitErrorCode,
+  error: string,
+): ApprovePermitResult {
+  return { ok: false, code, error };
+}
+
+/**
+ * Approved: update request + baris IZIN (method 'izin', tanpa sesi).
+ * Rejected: update request saja. Non-pending ditolak (idempoten).
+ * Yang boleh: admin, atau lecturer pemilik (pool NULL bebas).
+ */
+export async function approvePermitCore(
+  deps: ApprovePermitDeps,
+  input: ApprovePermitInput,
+): Promise<ApprovePermitResult> {
+  if (!input.isAdmin && !input.isLecturer) {
+    return permitFail("NOT_AUTHORIZED", ERR_DOSEN_SAJA);
+  }
+  if (input.decision !== "approved" && input.decision !== "rejected") {
+    return permitFail("INVALID_DECISION", ERR_SESI_TIDAK_LENGKAP);
+  }
+  const request = await deps.findRequest(input.permitId);
+  if (!request) {
+    return permitFail("NOT_FOUND", ERR_JADWAL_TIDAK_AKTIF);
+  }
+  if (request.status !== "pending") {
+    return permitFail("ALREADY_DECIDED", ERR_IZIN_SUDAH_DIPROSES);
+  }
+  if (!input.isAdmin) {
+    const owner = await deps.findScheduleOwner(request.schedule_id);
+    if (!owner) {
+      return permitFail("SCHEDULE_NOT_FOUND", ERR_JADWAL_TIDAK_AKTIF);
+    }
+    if (!isScheduleOwner(owner, input.callerId)) {
+      return permitFail("NOT_OWNER", ERR_DOSEN_SAJA);
+    }
+  }
+  let attendanceId: number | null = null;
+  if (input.decision === "approved") {
+    const row = await deps.insertIzinRecord(
+      request.schedule_id,
+      request.student_id,
+    );
+    attendanceId = row.id;
+  }
+  await deps.updateRequestStatus(request.id, input.decision);
+  return { ok: true, status: input.decision, attendance_id: attendanceId };
 }
