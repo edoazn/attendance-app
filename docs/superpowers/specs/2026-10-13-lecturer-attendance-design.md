@@ -1,6 +1,6 @@
 # Desain Alur Dosen: QR Statis + ON/OFF Manual
 
-**Status:** draft — menunggu persetujuan user sebelum jadi plan.
+**Status:** jawaban user masuk 2026-10-13 — menunggu persetujuan akhir dokumen.
 
 ## Intent & Why
 
@@ -38,8 +38,27 @@ Kelas nyata: satu QR statis per jadwal, ditempel fisik di kelas + ditampilkan di
 1. Satu token QR per jadwal, tampil di fisik + proyektor. (user)
 2. ON/OFF manual oleh dosen, karena absensi habis ngajar; otomatis-ditolak. (user)
 3. Mitigasi screenshot (my call): jendela ON pendek default 10 menit + tombol tutup manual; wajib-lokasi (geofence) jadi **opsional per jadwal** (default mati agar alur HP tetap ringan), bukan syarat submit QR. Rasional: window pendek sudah membatasi penyebaran; geofence wajib menambah friksi izin lokasi untuk semua mahasiswa. Bisa dibalik nanti tanpa ubah skema.
-4. Permukaan dosen (my call, butuh persetujuan — ini proyek baru): **dashboard web** di laptop proyektor (satu layar: QR besar + tombol ON/OFF + daftar hadir live + approve izin + CRUD jadwal/user), karena laptopnya memang sudah menyala di depan kelas. HP dosen jadi cadangan, bukan utama. Stack default (my call): web sederhana (Vite + React + TS + supabase-js) memakai project Supabase yang sama; RLS lecturer. Alternatif (perlu putusan user): bangun alur dosen di aplikasi Android yang ada saja.
+4. Permukaan dosen (DIPUTUSKAN user 2026-10-13): **dashboard web** — admin/dosen
+   memanage sistem dari web (pengganti dashboard admin di BE lama). Satu layar:
+   QR besar + tombol ON/OFF + daftar hadir live. HP dosen cadangan saja.
+   Stack: web sederhana (Vite + React + TS + supabase-js), project Supabase
+   yang sama; RLS lecturer. Login web pakai NIM + password via
+   `login-with-nim` yang sudah ada.
 5. Scoping dosen naik jadi in-scope: tambah `schedules.lecturer_id` + persempit policy lecturer (utang review Task 1/2) — wajib agar dashboard dosen hanya lihat jadwalnya sendiri.
+
+## Aturan status + bertahap (jawaban user 2026-10-13)
+
+- **TERLAMBAT dihapus praktis:** absensi hanya mungkin saat sesi ON (habis
+  ngajar, window pendek); semua submit yang diterima = `HADIR`. Kolom
+  `late_threshold_minutes` dipertahankan tapi diabaikan (warisan, hapus di
+  migrasi berikutnya bila yakin).
+- **Fase 1 (build ini):** token QR statis per jadwal + tombol ON/OFF +
+  daftar hadir live di dashboard + penyesuaian backend minimum
+  (`lecturer_id`, `session_open/expires_at`, tabel `attendance_sessions`,
+  rombak `set-session-state` + cabang QR `submit-attendance`,
+  `permit_requests.status` disiapkan tapi UI approve menyusul).
+- **Fase 2 (menyusul):** CRUD jadwal/user + approve izin + laporan/riwayat
+  + cetak QR fisik (unduh PNG).
 
 ## Perubahan backend yang dibutuhkan (ringkas, detail ikut plan)
 
