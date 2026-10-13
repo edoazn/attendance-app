@@ -72,6 +72,8 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.gson)
+    testImplementation(libs.mockwebserver)
     implementation(libs.accompanist.systemuicontroller)
     // CameraX
     implementation("androidx.camera:camera-core:1.5.2")

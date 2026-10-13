@@ -93,7 +93,21 @@ data class ScheduleDto(
     val hasQr: Boolean? = null,
 
     @field:SerializedName("has_active_code")
-    val hasActiveCode: Boolean? = null
+    val hasActiveCode: Boolean? = null,
+
+    // ─── Kolom R1 Supabase (Task 1, supabase/migrations/001_attendance_schema.sql) ──
+    // Ambang keterlambatan + geofence kelas; nullable agar respons lama tetap ter-parse.
+    @field:SerializedName("late_threshold_minutes")
+    val lateThresholdMinutes: Int? = null,
+
+    @field:SerializedName("latitude")
+    val latitude: Double? = null,
+
+    @field:SerializedName("longitude")
+    val longitude: Double? = null,
+
+    @field:SerializedName("radius_meters")
+    val radiusMeters: Int? = null
 ) {
     /** Ambil "HH:mm" saja dari string start_time (API kadang kirim "HH:mm:ss") */
     fun startTimeShort(): String = startTime?.take(5) ?: "—"

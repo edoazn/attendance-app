@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.attendaceapp.data.remote.response.ScheduleDto
-import com.example.attendaceapp.data.repository.ApiRepository
+import com.example.attendaceapp.data.repository.SupabaseRepository
 import com.example.attendaceapp.ui.state.AttendanceTab
 import com.example.attendaceapp.ui.state.StudentUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class StudentViewModel(private val repository: ApiRepository) : ViewModel() {
+class StudentViewModel(private val repository: SupabaseRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StudentUiState())
     val uiState: StateFlow<StudentUiState> = _uiState.asStateFlow()
@@ -142,12 +142,12 @@ class StudentViewModel(private val repository: ApiRepository) : ViewModel() {
     // ─── Factory ───────────────────────────────────────────────────────────────
 
     companion object {
-        /** Factory yang menyuntikkan Context ke ApiRepository. */
+        /** Factory yang menyuntikkan Context ke SupabaseRepository. */
         fun factory(context: Context): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    StudentViewModel(ApiRepository(context = context)) as T
+                    StudentViewModel(SupabaseRepository(context = context)) as T
             }
     }
 }

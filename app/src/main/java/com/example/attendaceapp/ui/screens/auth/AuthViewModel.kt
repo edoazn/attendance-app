@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.attendaceapp.data.local.UserPreferences
 import com.example.attendaceapp.data.model.User
 import com.example.attendaceapp.data.model.UserRole
-import com.example.attendaceapp.data.repository.ApiRepository
+import com.example.attendaceapp.data.repository.SupabaseRepository
 import com.example.attendaceapp.ui.state.AuthState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,14 +16,14 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel untuk autentikasi.
  * Extend [AndroidViewModel] agar bisa akses [Application] context
- * untuk menyimpan token ke SharedPreferences via [ApiRepository].
+ * untuk menyimpan token ke SharedPreferences via [SupabaseRepository].
  *
  * Pada saat init, sesi yang tersimpan otomatis di-restore sehingga
  * user tidak perlu login ulang setiap buka app.
  */
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository = ApiRepository(context = application)
+    private val repository = SupabaseRepository(context = application)
     private val prefs = UserPreferences.getInstance(application)
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)

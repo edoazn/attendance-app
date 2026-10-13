@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.attendaceapp.data.remote.response.ScheduleDto
-import com.example.attendaceapp.data.repository.ApiRepository
+import com.example.attendaceapp.data.repository.SupabaseRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +24,7 @@ data class ScheduleUiState(
         allSchedules.filter { it.day.orEmpty().equals(dayName, ignoreCase = true) }
 }
 
-class ScheduleViewModel(private val repository: ApiRepository) : ViewModel() {
+class ScheduleViewModel(private val repository: SupabaseRepository) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ScheduleUiState())
     val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
@@ -70,7 +70,7 @@ class ScheduleViewModel(private val repository: ApiRepository) : ViewModel() {
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                    ScheduleViewModel(ApiRepository(context = context)) as T
+                    ScheduleViewModel(SupabaseRepository(context = context)) as T
             }
     }
 }
