@@ -14,6 +14,9 @@
 .cxx
 local.properties
 
+# Superpowers worktrees (isolated implementation workspaces)
+.worktrees/
+
 # Windows reserved device names (cannot be indexed by Git on Windows)
 nul
 con
