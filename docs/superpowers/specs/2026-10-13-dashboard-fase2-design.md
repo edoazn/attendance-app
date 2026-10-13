@@ -93,6 +93,9 @@ untuk dosen + pengatur master data untuk admin/TU.
     (pemilik, putusan builder-check)
 13. Kode dashboard di repo terpisah (bukan folder di repo ini).
     (pemilik, putusan builder-check)
+14. Hosting frontend: Cloudflare Pages atau Vercel (static host, deploy
+    dari repo dashboard via Git; Supabase tetap backend saja). Dev jalan
+    lokal via `npm run dev`. (pemilik)
 
 ## Disiapkan untuk builder (my call)
 
