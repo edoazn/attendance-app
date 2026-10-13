@@ -209,11 +209,4 @@ fun LoginPage(
             )
         }
     }
-
-    // Reset auth state when leaving the screen
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.resetAuthState()
-        }
-    }
 }
