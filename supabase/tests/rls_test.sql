@@ -507,4 +507,86 @@ BEGIN
   RAISE NOTICE 'RLS_TEST: 5 policy fase-2 ada';
 END $$;
 
+-- ================================================================ FIX-PASS
+-- Temuan review Plan B: policy admin records/sessions + perilaku rekap.
+
+-- 17. Behavior: ADMIN (user JWT, bukan postgres) melihat semua jadwal +
+--     records + rekap; lecturer scope tetap; non-enrolled 0 baris rekap.
+DO $$
+DECLARE c int;
+BEGIN
+  BEGIN
+    INSERT INTO auth.users (id) VALUES
+      ('dddddddd-dddd-dddd-dddd-dddddddddddd')
+    ON CONFLICT DO NOTHING;
+  EXCEPTION WHEN not_null_violation THEN
+    RAISE NOTICE 'RLS_TEST: skip check-17 (auth.users butuh Dashboard/Auth API)';
+    RETURN;
+  END;
+  INSERT INTO public.profiles (id, identity_number, name, role) VALUES
+    ('dddddddd-dddd-dddd-dddd-dddddddddddd', '19900077', 'Admin Uji', 'ADMIN')
+  ON CONFLICT (id) DO UPDATE SET role = 'ADMIN';
+
+  SET ROLE authenticated;
+  PERFORM set_config('request.jwt.claims',
+    '{"sub": "dddddddd-dddd-dddd-dddd-dddddddddddd"}', false);
+  SELECT COUNT(*) INTO c FROM public.schedules;
+  IF c < 3 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'RLS_TEST_FAIL: admin melihat % jadwal (< 3 seed)', c;
+  END IF;
+  SELECT COUNT(*) INTO c FROM public.attendance_records;
+  IF c < 1 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'RLS_TEST_FAIL: admin melihat 0 attendance_records';
+  END IF;
+  SELECT COUNT(*) INTO c FROM public.attendance_summary;
+  IF c < 1 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'RLS_TEST_FAIL: admin melihat 0 baris rekap';
+  END IF;
+  -- Lecturer seed (Dr. Dosen) tetap melihat jadwalnya.
+  PERFORM set_config('request.jwt.claims',
+    '{"sub": "1d389c57-e170-4c39-a06c-f5ba11ee2239"}', false);
+  SELECT COUNT(*) INTO c FROM public.schedules;
+  IF c < 3 THEN
+    RESET ROLE;
+    RAISE EXCEPTION 'RLS_TEST_FAIL: dosen pemilik melihat % jadwal (< 3)', c;
+  END IF;
+  RESET ROLE;
+  RESET "request.jwt.claims";
+  RAISE NOTICE 'RLS_TEST: perilaku admin + scope lecturer OK';
+EXCEPTION WHEN OTHERS THEN
+  BEGIN RESET ROLE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  RAISE;
+END $$;
+DELETE FROM public.profiles WHERE id = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+DELETE FROM auth.users WHERE id = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+
+-- 18. View-content: baris IZIN (session NULL) TIDAK menambah penyebut.
+DO $$
+DECLARE total int;
+BEGIN
+  INSERT INTO public.attendance_records
+    (schedule_id, student_id, method, status, session_id)
+  VALUES (1, 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f', 'izin', 'IZIN', NULL);
+  SELECT total_sesi INTO total FROM public.attendance_summary
+  WHERE schedule_id = 1
+    AND student_id = 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f';
+  IF total <> 0 THEN
+    RAISE EXCEPTION 'RLS_TEST_FAIL: IZIN menambah penyebut (total=%)', total;
+  END IF;
+  RAISE NOTICE 'RLS_TEST: IZIN tidak menggelembungkan penyebut OK';
+EXCEPTION WHEN OTHERS THEN
+  DELETE FROM public.attendance_records
+  WHERE schedule_id = 1
+    AND student_id = 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f'
+    AND status = 'IZIN';
+  RAISE;
+END $$;
+DELETE FROM public.attendance_records
+WHERE schedule_id = 1
+  AND student_id = 'feaef403-a3ae-4c7f-88db-30c5cbcc9b2f'
+  AND status = 'IZIN';
+
 SELECT 'RLS_TEST_PASS' AS result;

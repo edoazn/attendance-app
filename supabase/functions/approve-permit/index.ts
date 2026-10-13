@@ -14,6 +14,7 @@ import {
   ERR_JADWAL_TIDAK_AKTIF,
   ERR_SESI_TIDAK_LENGKAP,
   ERR_UMUM,
+  isWriteConflictError,
   type PermitRequestRow,
 } from "../_shared/attendance.ts";
 
@@ -100,6 +101,28 @@ Deno.serve(async (req) => {
           .maybeSingle();
         return (data ?? null) as { lecturer_id: string | null } | null;
       },
+      findExistingNullRecord: async (scheduleId, studentId) => {
+        const { data } = await admin
+          .from("attendance_records")
+          .select("id")
+          .eq("schedule_id", scheduleId)
+          .eq("student_id", studentId)
+          .is("session_id", null)
+          .limit(1)
+          .maybeSingle();
+        return (data ?? null) as { id: number } | null;
+      },
+      claimRequest: async (permitId, decision) => {
+        // Klaim atomik: hanya menang bila masih pending.
+        const { data, error } = await admin
+          .from("permit_requests")
+          .update({ status: decision })
+          .eq("id", permitId)
+          .eq("status", "pending")
+          .select("id");
+        if (error) throw error;
+        return (data ?? []).length > 0;
+      },
       insertIzinRecord: async (scheduleId, studentId) => {
         const { data, error } = await admin
           .from("attendance_records")
@@ -113,15 +136,21 @@ Deno.serve(async (req) => {
           })
           .select("id")
           .single();
-        if (error || !data) throw error ?? new Error("insertIzin failed");
+        // Balapan klaim-menang ganda / baris NULL sudah ada: 409 generik.
+        if (error) {
+          if (
+            isWriteConflictError(
+              error as { code?: string; message?: string },
+            )
+          ) {
+            const e = new Error("izin-conflict") as Error & { code: string };
+            e.code = "IZIN_CONFLICT";
+            throw e;
+          }
+          throw error;
+        }
+        if (!data) throw new Error("insertIzin failed");
         return data as { id: number };
-      },
-      updateRequestStatus: async (id, status) => {
-        const { error } = await admin
-          .from("permit_requests")
-          .update({ status })
-          .eq("id", id);
-        if (error) throw error;
       },
     };
 
@@ -149,7 +178,13 @@ Deno.serve(async (req) => {
       status: result.status,
       attendance_id: result.attendance_id,
     }, 200);
-  } catch {
+  } catch (e) {
+    // Backstop balapan tulis: konflik unik -> 409 generik, bukan 500.
+    if (
+      (e as { code?: string })?.code === "IZIN_CONFLICT"
+    ) {
+      return json({ error: ERR_IZIN_SUDAH_DIPROSES }, 409);
+    }
     return json({ error: ERR_UMUM }, 500);
   }
 });

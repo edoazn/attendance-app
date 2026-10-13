@@ -14,6 +14,7 @@ import { assert, assertEquals } from "jsr:@std/assert@1";
 import {
   duplicateUserErrorMessage,
   ERR_USER_CREATE,
+  isWriteConflictError,
   validateCreateUserInput,
 } from "../_shared/attendance.ts";
 
@@ -71,4 +72,19 @@ Deno.test("create-user 5: pesan duplikat generik anti-enumerasi", () => {
   assert(!msg.toLowerCase().includes("sudah ada"));
   assert(!msg.toLowerCase().includes("terdaftar"));
   assert(!msg.toLowerCase().includes("duplikat"));
+});
+
+Deno.test("create-user 6: konflik tulis vs error lain", () => {
+  assertEquals(isWriteConflictError({ code: "23505" }), true);
+  assertEquals(isWriteConflictError({ code: "409" }), true);
+  assertEquals(
+    isWriteConflictError({ message: "duplicate key value violates unique" }),
+    true,
+  );
+  assertEquals(
+    isWriteConflictError({ message: "User already registered" }),
+    true,
+  );
+  assertEquals(isWriteConflictError({ message: "connection reset" }), false);
+  assertEquals(isWriteConflictError(null), false);
 });

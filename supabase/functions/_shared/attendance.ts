@@ -654,14 +654,22 @@ export interface ApprovePermitDeps {
   findScheduleOwner: (
     scheduleId: number,
   ) => Promise<{ lecturer_id: string | null } | null>;
+  findExistingNullRecord: (
+    scheduleId: number,
+    studentId: string,
+  ) => Promise<{ id: number } | null>;
+  /**
+   * Klaim atomik: UPDATE status WHERE id AND status='pending'.
+   * True = klaim menang (lanjut tulis); false = sudah diproses pihak lain.
+   */
+  claimRequest: (
+    permitId: number,
+    decision: "approved" | "rejected",
+  ) => Promise<boolean>;
   insertIzinRecord: (
     scheduleId: number,
     studentId: string,
   ) => Promise<{ id: number }>;
-  updateRequestStatus: (
-    permitId: number,
-    status: "approved" | "rejected",
-  ) => Promise<void>;
 }
 
 export type ApprovePermitErrorCode =
@@ -688,9 +696,12 @@ function permitFail(
 }
 
 /**
- * Approved: update request + baris IZIN (method 'izin', tanpa sesi).
- * Rejected: update request saja. Non-pending ditolak (idempoten).
- * Yang boleh: admin, atau lecturer pemilik (pool NULL bebas).
+ * Approved: klaim atomik + baris IZIN (method 'izin', tanpa sesi).
+ * Bila baris NULL-sesi sudah ada (mis. absen geo dulu), pakai ulang
+ * baris itu alih-alih insert (anti tabrakan partial unique 003).
+ * Rejected: klaim saja. Klaim kalah / non-pending -> 409 (idempoten).
+ * Urutan: otorisasi + pemilik DULU, baru status (anti bocor state ke
+ * bukan-pemilik).
  */
 export async function approvePermitCore(
   deps: ApprovePermitDeps,
@@ -706,9 +717,6 @@ export async function approvePermitCore(
   if (!request) {
     return permitFail("NOT_FOUND", ERR_JADWAL_TIDAK_AKTIF);
   }
-  if (request.status !== "pending") {
-    return permitFail("ALREADY_DECIDED", ERR_IZIN_SUDAH_DIPROSES);
-  }
   if (!input.isAdmin) {
     const owner = await deps.findScheduleOwner(request.schedule_id);
     if (!owner) {
@@ -718,16 +726,41 @@ export async function approvePermitCore(
       return permitFail("NOT_OWNER", ERR_DOSEN_SAJA);
     }
   }
+  const claimed = await deps.claimRequest(request.id, input.decision);
+  if (!claimed) {
+    return permitFail("ALREADY_DECIDED", ERR_IZIN_SUDAH_DIPROSES);
+  }
   let attendanceId: number | null = null;
   if (input.decision === "approved") {
-    const row = await deps.insertIzinRecord(
+    const existing = await deps.findExistingNullRecord(
       request.schedule_id,
       request.student_id,
     );
-    attendanceId = row.id;
+    if (existing) {
+      attendanceId = existing.id;
+    } else {
+      const row = await deps.insertIzinRecord(
+        request.schedule_id,
+        request.student_id,
+      );
+      attendanceId = row.id;
+    }
   }
-  await deps.updateRequestStatus(request.id, input.decision);
   return { ok: true, status: input.decision, attendance_id: attendanceId };
+}
+
+/**
+ * Benar konflik tulis (UNIQUE/Auth duplikat) vs error lain.
+ * Dipakai create-user: konflik -> 409 generik, sisanya -> 500.
+ */
+export function isWriteConflictError(
+  e: { code?: string; message?: string } | null | undefined,
+): boolean {
+  if (!e) return false;
+  const code = e.code ?? "";
+  const msg = e.message ?? "";
+  return code === "23505" || code === "409" ||
+    /already (exists|registered)|duplicate key/i.test(msg);
 }
 
 // ------------------------------------------------- create-user (fase-2)

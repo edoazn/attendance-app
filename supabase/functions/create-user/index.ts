@@ -14,6 +14,7 @@ import {
   ERR_DOSEN_SAJA,
   ERR_SESI_TIDAK_LENGKAP,
   ERR_UMUM,
+  isWriteConflictError,
   validateCreateUserInput,
 } from "../_shared/attendance.ts";
 
@@ -87,6 +88,7 @@ Deno.serve(async (req) => {
     }
 
     // 1. Akun auth dulu (email konfirmasi otomatis: akun layanan internal).
+    //    Hanya konflik nyata -> 409; error lain -> 500 agar bisa dibedakan.
     const { data: created, error: createError } = await admin.auth.admin
       .createUser({
         email: validated.email,
@@ -95,10 +97,17 @@ Deno.serve(async (req) => {
         user_metadata: { identity_number: validated.nim, name: validated.name },
       });
     if (createError || !created.user) {
-      return json({ error: duplicateUserErrorMessage() }, 409);
+      if (
+        isWriteConflictError(
+          createError as { code?: string; message?: string } | null,
+        )
+      ) {
+        return json({ error: duplicateUserErrorMessage() }, 409);
+      }
+      return json({ error: ERR_UMUM }, 500);
     }
 
-    // 2. Profil (NIM unik). Gagal -> rollback akun auth, tetap generik.
+    // 2. Profil (NIM unik). Gagal -> rollback akun auth; konflik -> 409.
     const { error: profileError } = await admin
       .from("profiles")
       .insert({
@@ -111,7 +120,14 @@ Deno.serve(async (req) => {
       });
     if (profileError) {
       await admin.auth.admin.deleteUser(created.user.id);
-      return json({ error: duplicateUserErrorMessage() }, 409);
+      if (
+        isWriteConflictError(
+          profileError as { code?: string; message?: string },
+        )
+      ) {
+        return json({ error: duplicateUserErrorMessage() }, 409);
+      }
+      return json({ error: ERR_UMUM }, 500);
     }
 
     return json({
