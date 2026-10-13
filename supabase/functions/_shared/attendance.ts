@@ -92,6 +92,28 @@ export function haversineMeters(
 }
 
 // ---------------------------------------------------------------- status
+// start_time disimpan sebagai waktu lokal kampus (WIB). Edge runtime
+// berjalan di UTC sehingga getHours()/getMinutes() lokal SALAH sistematis
+// (selisih 7 jam — TERLAMBAT hampir tak pernah keluar). Semua perbandingan
+// memakai zona eksplisit Asia/Jakarta.
+export const CAMPUS_TIME_ZONE = "Asia/Jakarta";
+
+const jakartaTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  timeZone: CAMPUS_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+/** Menit sejak tengah malam di zona kampus untuk satu instant. */
+export function jakartaMinutesOfDay(now: Date): number {
+  const parts = jakartaTimeFormat.formatToParts(now);
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return get("hour") * 60 + get("minute") + get("second") / 60;
+}
+
 function startTimeToMinutes(startTime: string): number {
   const parts = startTime.split(":").map(Number);
   const h = parts[0] ?? 0;
@@ -100,15 +122,18 @@ function startTimeToMinutes(startTime: string): number {
   return h * 60 + m + s / 60;
 }
 
-/** HADIR bila serverNow <= start_time + threshold, selain itu TERLAMBAT. */
+/**
+ * HADIR bila jam kampus(serverNow) <= start_time + threshold,
+ * selain itu TERLAMBAT. serverNow adalah instant (epoch); konversi ke
+ * waktu kampus dilakukan eksplisit via CAMPUS_TIME_ZONE.
+ */
 export function determineStatus(
   serverNow: Date,
   startTime: string,
   lateThresholdMinutes: number | null | undefined,
 ): string {
   const threshold = lateThresholdMinutes ?? DEFAULT_LATE_THRESHOLD_MINUTES;
-  const nowMinutes = serverNow.getHours() * 60 + serverNow.getMinutes() +
-    serverNow.getSeconds() / 60;
+  const nowMinutes = jakartaMinutesOfDay(serverNow);
   return nowMinutes <= startTimeToMinutes(startTime) + threshold
     ? STATUS_HADIR
     : STATUS_TERLAMBAT;
@@ -154,7 +179,27 @@ export type SubmitResult =
     method: string;
     attendance: AttendanceRecordRow;
   }
-  | { ok: false; error: string };
+  | { ok: false; code: SubmitErrorCode; error: string };
+
+/**
+ * Kode error terketik untuk pemetaan status HTTP di handler
+ * (jangan sniff teks pesan: redaksional boleh berubah tanpa
+ * merusak status code).
+ */
+export type SubmitErrorCode =
+  | "INVALID_METHOD"
+  | "SCHEDULE_INACTIVE"
+  | "DUPLICATE"
+  | "LOCATION_INCOMPLETE"
+  | "LOCATION_NOT_SET"
+  | "OUT_OF_RANGE"
+  | "QR_INVALID"
+  | "QR_EXPIRED"
+  | "CODE_INVALID";
+
+function fail(code: SubmitErrorCode, error: string): SubmitResult {
+  return { ok: false, code, error };
+}
 
 function isExpired(expiresAt: string, now: Date): boolean {
   return new Date(expiresAt).getTime() <= now.getTime();
@@ -167,19 +212,19 @@ export async function submitAttendanceCore(
   const serverNow = deps.now(); // SATU-SATUNYA sumber jam (abaikan clientNow).
 
   if (!isSubmitMethod(input.method)) {
-    return { ok: false, error: ERR_METODE_TIDAK_VALID };
+    return fail("INVALID_METHOD", ERR_METODE_TIDAK_VALID);
   }
 
   const schedule = await deps.findSchedule(input.scheduleId);
   if (!schedule || !schedule.is_active) {
-    return { ok: false, error: ERR_JADWAL_TIDAK_AKTIF };
+    return fail("SCHEDULE_INACTIVE", ERR_JADWAL_TIDAK_AKTIF);
   }
 
   const existing = await deps.findExistingRecord(
     input.scheduleId,
     input.studentId,
   );
-  if (existing) return { ok: false, error: ERR_DUPLIKAT };
+  if (existing) return fail("DUPLICATE", ERR_DUPLIKAT);
 
   let distance: number | null = null;
 
@@ -190,10 +235,10 @@ export async function submitAttendanceCore(
       !Number.isFinite(input.latitude) ||
       !Number.isFinite(input.longitude)
     ) {
-      return { ok: false, error: ERR_LOKASI_TIDAK_LENGKAP };
+      return fail("LOCATION_INCOMPLETE", ERR_LOKASI_TIDAK_LENGKAP);
     }
     if (schedule.latitude == null || schedule.longitude == null) {
-      return { ok: false, error: ERR_LOKASI_BELUM_DIATUR };
+      return fail("LOCATION_NOT_SET", ERR_LOKASI_BELUM_DIATUR);
     }
     distance = haversineMeters(
       schedule.latitude,
@@ -203,27 +248,27 @@ export async function submitAttendanceCore(
     );
     const radius = schedule.radius_meters ?? DEFAULT_RADIUS_METERS;
     if (distance > radius) {
-      return { ok: false, error: ERR_LOKASI_JANGKAUAN };
+      return fail("OUT_OF_RANGE", ERR_LOKASI_JANGKAUAN);
     }
   } else if (input.method === "qr_code") {
     const token = (input.qrToken ?? "").trim();
-    if (!token) return { ok: false, error: ERR_QR_TIDAK_VALID };
+    if (!token) return fail("QR_INVALID", ERR_QR_TIDAK_VALID);
     const row = await deps.findQrToken(token);
     if (!row || row.schedule_id !== input.scheduleId) {
-      return { ok: false, error: ERR_QR_TIDAK_VALID };
+      return fail("QR_INVALID", ERR_QR_TIDAK_VALID);
     }
     if (isExpired(row.expires_at, serverNow)) {
-      return { ok: false, error: ERR_QR_KEDALUWARSA };
+      return fail("QR_EXPIRED", ERR_QR_KEDALUWARSA);
     }
   } else {
     const code = (input.attendanceCode ?? "").trim().toUpperCase();
-    if (!code) return { ok: false, error: ERR_KODE_SALAH };
+    if (!code) return fail("CODE_INVALID", ERR_KODE_SALAH);
     const row = await deps.findAttendanceCode(code);
     if (!row || row.schedule_id !== input.scheduleId) {
-      return { ok: false, error: ERR_KODE_SALAH };
+      return fail("CODE_INVALID", ERR_KODE_SALAH);
     }
     if (!row.is_active || isExpired(row.expires_at, serverNow)) {
-      return { ok: false, error: ERR_KODE_SALAH };
+      return fail("CODE_INVALID", ERR_KODE_SALAH);
     }
   }
 

@@ -175,8 +175,11 @@ Deno.serve(async (req) => {
     }
 
     if (!result.ok) {
-      const status = result.error.includes("sudah tercatat") ? 409 : 400;
-      return json({ error: result.error }, status);
+      // Pemetaan via code terketik (bukan sniffing teks pesan).
+      return json(
+        { error: result.error },
+        result.code === "DUPLICATE" ? 409 : 400,
+      );
     }
     return json({
       status: result.status,

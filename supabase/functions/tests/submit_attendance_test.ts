@@ -6,6 +6,8 @@
 // 2. QR kedaluwarsa: qr_token expired -> error "kedaluwarsa".
 // 3. Clock skew: client clock maju 2 jam -> status tetap dari server now().
 // 4. Login generik: NIM salah vs password salah -> pesan error IDENTIK.
+// 5. QR valid + kode lower-case ok, geofence jauh ditolak.
+// 6. Zona (regresi Critical): instant UTC setara 08:20 WIB -> TERLAMBAT.
 //
 // Jalankan: deno test supabase/functions/tests/submit_attendance_test.ts
 
@@ -98,8 +100,14 @@ function deps(db: MockDb): SubmitDeps {
   };
 }
 
-// Kampus Monas: server jam 08:05 (masih dalam threshold 08:00+15) -> HADIR.
-const SERVER_PAGI = new Date(2026, 9, 14, 8, 5, 0);
+// Instant eksplisit (UTC) agar independen dari TZ mesin uji maupun
+// runtime Edge (UTC): 01:05 UTC == 08:05 WIB (dalam threshold 08:00+15).
+// Versi lama memakai new Date(2026,9,14,8,5,0) runtime-local yang
+// mem-masking bug zona di mesin ber-TZ WIB.
+const SERVER_PAGI = new Date(Date.UTC(2026, 9, 14, 1, 5, 0));
+// 01:20 UTC == 08:20 WIB (lewat deadline 08:15) -> harus TERLAMBAT.
+// Di kode lama (getHours runtime UTC) ini terhitung 01:20 <= 08:15 -> HADIR.
+const SERVER_TELAT_WIB = new Date(Date.UTC(2026, 9, 14, 1, 20, 0));
 
 Deno.test("submit 1: duplicate - call ke-2 mengandung 'sudah'", async () => {
   const db = mockDb(SERVER_PAGI);
@@ -122,7 +130,10 @@ Deno.test("submit 1: duplicate - call ke-2 mengandung 'sudah'", async () => {
     longitude: 106.816666,
   });
   assert(!second.ok, "call kedua harus gagal (duplicate)");
-  if (!second.ok) assertStringIncludes(second.error, "sudah");
+  if (!second.ok) {
+    assertStringIncludes(second.error, "sudah");
+    assertEquals(second.code, "DUPLICATE");
+  }
 });
 
 Deno.test("submit 2: qr_token kedaluwarsa mengandung 'kedaluwarsa'", async () => {
@@ -141,7 +152,10 @@ Deno.test("submit 2: qr_token kedaluwarsa mengandung 'kedaluwarsa'", async () =>
     qrToken: "qr-expired-1",
   });
   assert(!res.ok, "qr kedaluwarsa harus gagal");
-  if (!res.ok) assertStringIncludes(res.error, "kedaluwarsa");
+  if (!res.ok) {
+    assertStringIncludes(res.error, "kedaluwarsa");
+    assertEquals(res.code, "QR_EXPIRED");
+  }
 });
 
 Deno.test("submit 3: clock skew - client maju 2 jam, status dari server now()", async () => {
@@ -216,5 +230,35 @@ Deno.test("submit 5: qr valid + kode lower-case tetap ok, lokasi jauh ditolak", 
     longitude: 107.60981,
   });
   assert(!jauh.ok, "di luar jangkauan harus gagal");
-  if (!jauh.ok) assertStringIncludes(jauh.error.toLowerCase(), "jangkauan");
+  if (!jauh.ok) {
+    assertStringIncludes(jauh.error.toLowerCase(), "jangkauan");
+    assertEquals(jauh.code, "OUT_OF_RANGE");
+  }
+});
+
+Deno.test("submit 6: zona - 01:20 UTC (=08:20 WIB) harus TERLAMBAT", async () => {
+  const geo = {
+    studentId: STUDENT_A,
+    scheduleId: 1,
+    method: "geolocation" as const,
+    latitude: -6.2,
+    longitude: 106.816666,
+  };
+  const telat = await submitAttendanceCore(
+    deps(mockDb(SERVER_TELAT_WIB)),
+    geo,
+  );
+  assert(telat.ok, `harus ok, dapat: ${JSON.stringify(telat)}`);
+  if (telat.ok) {
+    assertEquals(telat.status, "TERLAMBAT");
+    assertEquals(telat.attendance.status, "TERLAMBAT");
+  }
+
+  // Kontrol arah berlawanan: 23:30 UTC (=06:30 WIB, sebelum mulai) -> HADIR.
+  const pagiButa = await submitAttendanceCore(
+    deps(mockDb(new Date(Date.UTC(2026, 9, 13, 23, 30, 0)))),
+    geo,
+  );
+  assert(pagiButa.ok, `harus ok, dapat: ${JSON.stringify(pagiButa)}`);
+  if (pagiButa.ok) assertEquals(pagiButa.status, "HADIR");
 });
