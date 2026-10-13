@@ -618,7 +618,6 @@ private fun EmptyScheduleState(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("📅", fontSize = 64.sp)
         Text(
             "Tidak Ada Jadwal Hari Ini",
             fontSize = 18.sp,

@@ -16,7 +16,7 @@ class ApiRepository(
     private val context: Context? = null
 ) {
 
-    // ─── Auth ──────────────────────────────────────────────────────────────────
+    // AUTH
 
     /**
      * Login dengan NIM & password.
@@ -33,6 +33,12 @@ class ApiRepository(
                     val userDto = loginData?.user
 
                     if (loginData != null && userDto != null) {
+                        // Pastikan token tersedia — tanpa token fitur yang butuh autentikasi
+                        // (jadwal, absensi) tidak dapat bekerja. Kembalikan failure jika
+                        // server tidak mengembalikan token meskipun login success.
+                        if (loginData.token.isNullOrBlank()) {
+                            return Result.failure(Exception("Login gagal: token tidak tersedia dari server"))
+                        }
                         val user = User(
                             id = userDto.id?.toString() ?: "",
                             nim = userDto.identityNumber ?: "",
@@ -44,9 +50,10 @@ class ApiRepository(
                             }
                         )
 
-                        // Simpan token & info user ke local preferences
+                        // Simpan token & info user ke local preferences (hanya bila context ada)
                         context?.let { ctx ->
                             val prefs = UserPreferences.getInstance(ctx)
+                            // token sudah dipastikan tidak null/blank di atas
                             prefs.authToken = loginData.token
                             prefs.userId = user.id
                             prefs.userName = user.name
