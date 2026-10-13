@@ -17,6 +17,9 @@ local.properties
 # Superpowers worktrees (isolated implementation workspaces)
 .worktrees/
 
+# Supabase CLI cache
+supabase/.temp/
+
 # Windows reserved device names (cannot be indexed by Git on Windows)
 nul
 con
