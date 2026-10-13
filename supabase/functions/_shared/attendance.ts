@@ -301,6 +301,9 @@ export function loginErrorMessage(_reason: LoginFailureReason): string {
 }
 
 // ---------------------------------------------------------------- sesi dosen
+// Fase-1: token QR statis per jadwal + sesi ON/OFF manual.
+// ensureSessionQrCore dipakai handler ensure-session-qr; diuji di
+// supabase/functions/tests/ensure_session_qr_test.ts dengan mock deps.
 /**
  * Guard jadwal aktif untuk generate-session: jadwal arsip (is_active=false)
  * atau hilang (null) TIDAK boleh mendapat qr_token/code baru.
@@ -334,4 +337,72 @@ export function generateAttendanceCode(
     code += CODE_ALPHABET[pick(CODE_ALPHABET.length)];
   }
   return code;
+}
+
+// ------------------------------------------------- ensure-session-qr (fase-1)
+export interface ScheduleOwnershipRow {
+  id: number;
+  is_active: boolean;
+  lecturer_id: string | null;
+}
+
+export interface EnsureQrInput {
+  callerId: string;
+  isLecturer: boolean;
+  scheduleId: number;
+}
+
+export interface EnsureQrDeps {
+  /** Token baru; default crypto.randomUUID, dapat di-inject untuk test. */
+  newToken: () => string;
+  findSchedule: (id: number) => Promise<ScheduleOwnershipRow | null>;
+  findQrTokenBySchedule: (scheduleId: number) => Promise<string | null>;
+  insertQrToken: (scheduleId: number, token: string) => Promise<void>;
+}
+
+export type EnsureQrErrorCode =
+  | "NOT_LECTURER"
+  | "SCHEDULE_NOT_FOUND"
+  | "NOT_OWNER";
+
+export type EnsureQrResult =
+  | { ok: true; qr_token: string; created: boolean }
+  | { ok: false; code: EnsureQrErrorCode; error: string };
+
+/**
+ * Idempoten: jadwal yang sudah punya token mengembalikan token yang sama
+ * dengan created=false. lecturer_id NULL (pool unassigned) boleh diakses
+ * lecturer mana pun; jadwal arsip/hilang ditolak generik.
+ */
+export async function ensureSessionQrCore(
+  deps: EnsureQrDeps,
+  input: EnsureQrInput,
+): Promise<EnsureQrResult> {
+  if (!input.isLecturer) {
+    return { ok: false, code: "NOT_LECTURER", error: ERR_DOSEN_SAJA };
+  }
+  const schedule = await deps.findSchedule(input.scheduleId);
+  if (!schedule || !schedule.is_active) {
+    return {
+      ok: false,
+      code: "SCHEDULE_NOT_FOUND",
+      error: ERR_JADWAL_TIDAK_AKTIF,
+    };
+  }
+  if (schedule.lecturer_id != null && schedule.lecturer_id !== input.callerId) {
+    return { ok: false, code: "NOT_OWNER", error: ERR_DOSEN_SAJA };
+  }
+  const existing = await deps.findQrTokenBySchedule(input.scheduleId);
+  if (existing) return { ok: true, qr_token: existing, created: false };
+
+  const token = deps.newToken();
+  try {
+    await deps.insertQrToken(input.scheduleId, token);
+  } catch {
+    // Balapan: baris sudah dibuat penelepon lain -> baca ulang.
+    const raced = await deps.findQrTokenBySchedule(input.scheduleId);
+    if (raced) return { ok: true, qr_token: raced, created: false };
+    throw new Error("insertQrToken failed");
+  }
+  return { ok: true, qr_token: token, created: true };
 }
