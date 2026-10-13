@@ -16,6 +16,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Repository Supabase — pengganti [ApiRepository].
@@ -64,21 +66,27 @@ class SupabaseRepository(
         }
         return try {
             val payload = mapOf("nim" to nim, "password" to password)
-            val response = postFunction(
-                path = "login-with-nim",
-                body = gson.toJson(payload),
-                token = null
-            )
-            val rawBody = response.body?.string().orEmpty()
-            if (response.isSuccessful) {
-                val parsed = parseLoginBody(rawBody)
-                    ?: return Result.failure(Exception("Data user tidak ditemukan"))
-                persistSession(parsed.first, parsed.second)
-                Result.success(parsed.second)
-            } else {
-                Result.failure(
-                    Exception(errorMessageOf(rawBody, "NIM atau kata sandi salah."))
-                )
+            withContext(Dispatchers.IO) {
+                postFunction(
+                    path = "login-with-nim",
+                    body = gson.toJson(payload),
+                    token = null
+                ).use { response ->
+                    val rawBody = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        val parsed = parseLoginBody(rawBody)
+                        if (parsed == null) {
+                            Result.failure<User>(Exception("Data user tidak ditemukan"))
+                        } else {
+                            persistSession(parsed.first, parsed.second)
+                            Result.success(parsed.second)
+                        }
+                    } else {
+                        Result.failure<User>(
+                            Exception(errorMessageOf(rawBody, "NIM atau kata sandi salah."))
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             Result.failure(Exception("Tidak dapat terhubung ke server. Periksa koneksi internet."))
@@ -100,17 +108,19 @@ class SupabaseRepository(
                 url = "$restBaseUrl/today_schedules_with_flags?select=*",
                 token = token
             )
-            httpClient.newCall(request).execute().use { response ->
-                val rawBody = response.body?.string().orEmpty()
-                if (response.isSuccessful) {
-                    val type = object : TypeToken<List<ScheduleDto>>() {}.type
-                    val list: List<ScheduleDto> =
-                        gson.fromJson(rawBody.ifBlank { "[]" }, type) ?: emptyList()
-                    Result.success(list)
-                } else {
-                    Result.failure(
-                        Exception(errorMessageOf(rawBody, "Gagal memuat jadwal"))
-                    )
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val rawBody = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        val type = object : TypeToken<List<ScheduleDto>>() {}.type
+                        val list: List<ScheduleDto> =
+                            gson.fromJson(rawBody.ifBlank { "[]" }, type) ?: emptyList()
+                        Result.success(list)
+                    } else {
+                        Result.failure<List<ScheduleDto>>(
+                            Exception(errorMessageOf(rawBody, "Gagal memuat jadwal"))
+                        )
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -131,17 +141,19 @@ class SupabaseRepository(
                 url = "$restBaseUrl/schedules?select=*&is_active=eq.true",
                 token = token
             )
-            httpClient.newCall(request).execute().use { response ->
-                val rawBody = response.body?.string().orEmpty()
-                if (response.isSuccessful) {
-                    val type = object : TypeToken<List<ScheduleDto>>() {}.type
-                    val list: List<ScheduleDto> =
-                        gson.fromJson(rawBody.ifBlank { "[]" }, type) ?: emptyList()
-                    Result.success(list)
-                } else {
-                    Result.failure(
-                        Exception(errorMessageOf(rawBody, "Gagal memuat jadwal"))
-                    )
+            withContext(Dispatchers.IO) {
+                httpClient.newCall(request).execute().use { response ->
+                    val rawBody = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        val type = object : TypeToken<List<ScheduleDto>>() {}.type
+                        val list: List<ScheduleDto> =
+                            gson.fromJson(rawBody.ifBlank { "[]" }, type) ?: emptyList()
+                        Result.success(list)
+                    } else {
+                        Result.failure<List<ScheduleDto>>(
+                            Exception(errorMessageOf(rawBody, "Gagal memuat jadwal"))
+                        )
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -196,7 +208,7 @@ class SupabaseRepository(
 
     // ─── Internal ────────────────────────────────────────────────────────────
 
-    private fun submitAttendance(
+    private suspend fun submitAttendance(
         scheduleId: Int,
         method: String,
         latitude: Double? = null,
@@ -217,20 +229,28 @@ class SupabaseRepository(
             if (qrToken != null) payload["qr_token"] = qrToken
             if (attendanceCode != null) payload["attendance_code"] = attendanceCode
 
-            val response = postFunction(
-                path = "submit-attendance",
-                body = gson.toJson(payload),
-                token = token
-            )
-            val rawBody = response.body?.string().orEmpty()
-            if (response.isSuccessful) {
-                val data = parseAttendanceBody(rawBody)
-                    ?: return Result.failure(Exception("Response data kosong"))
-                Result.success(data)
-            } else {
-                // Duplicate dari backend = HTTP 409 dengan pesan Indonesia;
-                // teruskan pesan server apa adanya.
-                Result.failure(Exception(errorMessageOf(rawBody, "Absensi gagal")))
+            withContext(Dispatchers.IO) {
+                postFunction(
+                    path = "submit-attendance",
+                    body = gson.toJson(payload),
+                    token = token
+                ).use { response ->
+                    val rawBody = response.body?.string().orEmpty()
+                    if (response.isSuccessful) {
+                        val data = parseAttendanceBody(rawBody)
+                        if (data == null) {
+                            Result.failure<AttendanceData>(Exception("Response data kosong"))
+                        } else {
+                            Result.success(data)
+                        }
+                    } else {
+                        // Duplicate dari backend = HTTP 409 dengan pesan Indonesia;
+                        // teruskan pesan server apa adanya.
+                        Result.failure<AttendanceData>(
+                            Exception(errorMessageOf(rawBody, "Absensi gagal"))
+                        )
+                    }
+                }
             }
         } catch (e: Exception) {
             Result.failure(Exception("Tidak dapat terhubung ke server. Periksa koneksi internet."))
